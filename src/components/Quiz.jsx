@@ -1,25 +1,25 @@
 import React, { useEffect, useState } from 'react';
 
-export default function Quiz({ question, options, correctAnswer, onAnswer, timeLimit }) {
+export default function Quiz({ question, options, onAnswer, timeLimit }) {
   const [timeLeft, setTimeLeft] = useState(timeLimit);
   const [shuffledOptions, setShuffledOptions] = useState([]);
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [disabled, setDisabled] = useState(false);
+  const [selectedOption, setSelectedOption] = useState(null); // track selected answer
+  const [disabled, setDisabled] = useState(false); // disable buttons after select
 
   // Shuffle once whenever question changes
   useEffect(() => {
     const shuffled = [...options].sort(() => Math.random() - 0.5);
     setShuffledOptions(shuffled);
     setTimeLeft(timeLimit);
-    setSelectedOption(null);
-    setDisabled(false);
+    setSelectedOption(null); // reset selected answer
+    setDisabled(false);      // enable buttons for new question
   }, [question, options, timeLimit]);
 
   // Timer countdown
   useEffect(() => {
     if (timeLeft <= 0) {
-      if (!selectedOption) onAnswer(null);
-      setDisabled(true);
+      if (!selectedOption) onAnswer(null); // treat as wrong if timeout
+      setDisabled(true); // disable buttons when time is up
       return;
     }
     const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
@@ -35,13 +35,6 @@ export default function Quiz({ question, options, correctAnswer, onAnswer, timeL
 
   const timerColor = timeLeft <= 5 ? 'text-red-600 animate-pulse' : 'text-green-700';
 
-  const getButtonClass = (opt) => {
-    if (!selectedOption) return 'bg-white/90 hover:bg-blue-200';
-    if (opt === correctAnswer) return 'bg-green-400 text-white font-bold';
-    if (opt === selectedOption && selectedOption !== correctAnswer) return 'bg-red-400 text-white font-bold';
-    return 'opacity-50 cursor-not-allowed';
-  };
-
   return (
     <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 shadow-inner">
       <div className="flex justify-between items-center mb-4">
@@ -54,7 +47,9 @@ export default function Quiz({ question, options, correctAnswer, onAnswer, timeL
             key={opt}
             onClick={() => handleAnswer(opt)}
             disabled={disabled}
-            className={`w-full p-4 rounded-2xl shadow-md transition text-left text-base font-medium ${getButtonClass(opt)}`}
+            className={`w-full p-4 rounded-2xl bg-white/90 shadow-md hover:bg-blue-200 transition text-left text-base font-medium
+              ${selectedOption === opt ? 'bg-blue-300 font-bold' : ''} 
+              ${disabled && selectedOption !== opt ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {opt}
           </button>
