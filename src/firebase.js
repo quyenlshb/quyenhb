@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'; // Thêm GoogleAuthProvider và signInWithPopup
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -20,3 +20,6 @@ try { analytics = getAnalytics(app); } catch(e) { console.log('Analytics init fa
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export default app;
+
+// Thêm Google Provider
+export const googleProvider = new GoogleAuthProvider();
