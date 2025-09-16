@@ -13,13 +13,14 @@ export default function App(){
   const handleBack = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
   const handleHome = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
   const [user, setUser] = useState(null);
-  const [page, setPage] = useState('dashboard'); // dashboard | vocab | quiz | settings | auth
+  const [page, setPage] = useState('dashboard');
   const [sets, setSets] = useState(() => loadLocal('vocabSets', sampleSets));
   const [settings, setSettings] = useState(() => loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
-  const [pointsToday, setPointsToday] = useState(() => Number(localStorage.getItem('pointsToday') || 0));
-  const [totalPoints, setTotalPoints] = useState(() => Number(localStorage.getItem('totalPoints') || 0));
-  const [streak, setStreak] = useState(() => Number(localStorage.getItem('streak') || 0));
-  const [lastSync, setLastSync] = useState(() => Number(localStorage.getItem('lastSync') || 0));
+  // Sửa lỗi: Sử dụng loadLocal để tải điểm và streak một cách nhất quán
+  const [pointsToday, setPointsToday] = useState(() => loadLocal('pointsToday', 0));
+  const [totalPoints, setTotalPoints] = useState(() => loadLocal('totalPoints', 0));
+  const [streak, setStreak] = useState(() => loadLocal('streak', 0));
+  const [lastSync, setLastSync] = useState(() => loadLocal('lastSync', 0));
 
   useEffect(()=>{
     saveLocal('vocabSets', sets);
@@ -27,27 +28,25 @@ export default function App(){
 
   useEffect(()=> saveLocal('settings', settings), [settings]);
 
-  useEffect(()=> localStorage.setItem('pointsToday', pointsToday), [pointsToday]);
-  useEffect(()=> localStorage.setItem('totalPoints', totalPoints), [totalPoints]);
-  useEffect(()=> localStorage.setItem('streak', streak), [streak]);
+  // Sửa lỗi: Sử dụng saveLocal để lưu điểm và streak
+  useEffect(()=> saveLocal('pointsToday', pointsToday), [pointsToday]);
+  useEffect(()=> saveLocal('totalPoints', totalPoints), [totalPoints]);
+  useEffect(()=> saveLocal('streak', streak), [streak]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if(u && navigator.onLine){
-        // simple sync: push local to Firestore if local is newer, else pull remote
         try{
           const docRef = doc(db, 'users', u.uid);
           const snap = await getDoc(docRef);
           const remote = snap.exists() ? snap.data() : null;
-          const localMeta = JSON.parse(localStorage.getItem('vocabSets')) || null;
-          // if remote missing or local updatedAt newer, push local
+          const localMeta = loadLocal('vocabSets', []);
+          
           if(!remote || (localMeta && localMeta.updatedAt && localMeta.updatedAt > (remote.vocabSets?.updatedAt||0))){
             await setDoc(docRef, { vocabSets: localMeta, settings, pointsToday, totalPoints, streak, updatedAt: Date.now() });
             setLastSync(Date.now());
-            localStorage.setItem('lastSync', Date.now());
           } else {
-            // remote exists and is newer, load remote
             if(remote.vocabSets) setSets(remote.vocabSets.data || sampleSets);
             if(remote.settings) setSettings(remote.settings);
             if(remote.pointsToday) setPointsToday(remote.pointsToday);
@@ -72,21 +71,19 @@ export default function App(){
   };
 
   const finishSession = () => {
-    // when session completes, check daily target / streak
     const target = settings.dailyTarget || 0;
     const todayKey = new Date().toISOString().slice(0,10);
     const achieved = pointsToday >= target;
     if(achieved) {
       setStreak(s => s + 1);
     } else {
-      // if missed today reset
       setStreak(0);
     }
-    // save daily record
     const recKey = 'history_' + todayKey;
     localStorage.setItem(recKey, JSON.stringify({ points: pointsToday, date: todayKey }));
-    // reset pointsToday for next session
+    // Cập nhật và lưu pointsToday sau khi hoàn thành phiên
     setPointsToday(0);
+    saveLocal('pointsToday', 0);
     alert('Phiên học hoàn tất');
     setPage('dashboard');
   };
@@ -115,7 +112,7 @@ export default function App(){
                     <div key={s.id} className="flex items-center justify-between p-2 border-b">
                       <div>{s.name}</div>
                       <div className="space-x-2">
-                        <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded" onMouseDown={()=>{ /* ensure quiz picks this set via temp storage */ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
+                        <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded" onMouseDown={()=>{ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
                         <button onClick={()=> setPage('vocab')} className="px-3 py-1 bg-gray-200 rounded">Quản lý ✏️</button>
                       </div>
                     </div>
@@ -141,7 +138,6 @@ export default function App(){
   );
 }
 
-// Inline small SettingsPanel to keep single-file simple
 function SettingsPanel({ settings, setSettings }){
   const [timer, setTimer] = useState(settings.timer || 10);
   const [perSession, setPerSession] = useState(settings.perSession || 10);
@@ -150,14 +146,14 @@ function SettingsPanel({ settings, setSettings }){
   useEffect(()=>{},[]);
 
   const save = () => {
-    // if dailyTarget is being decreased, block
     if(dailyTarget < (settings.dailyTarget || 0)){
       alert('Mục tiêu chỉ có thể tăng, không thể giảm');
       return;
     }
     const ns = {...settings, timer, perSession, dailyTarget};
     setSettings(ns);
-    localStorage.setItem('settings', JSON.stringify(ns));
+    // Sửa lỗi: Sử dụng saveLocal
+    saveLocal('settings', ns);
     alert('Đã lưu cài đặt');
   };
 
