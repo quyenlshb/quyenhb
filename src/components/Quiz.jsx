@@ -80,7 +80,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
     return (
       <div className="p-4">
         <div className="font-semibold mb-2">Chọn bộ để học</div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {sets.map(s=>(
             <div key={s.id} className="flex justify-between items-center p-2 bg-white rounded shadow">
               <div>{s.name}</div>
@@ -124,9 +124,9 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
             {showNote && <div className="mt-2 text-sm">{current.kana} — {current.meaning}</div>}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {options.map((o,i)=>(
-              <button key={i} onClick={()=>choose(o)} className="w-full p-3 rounded bg-gray-100 text-left">{o}</button>
+              <button key={i} onClick={()=>choose(o)} className="w-full p-4 rounded-xl bg-white shadow hover:bg-gray-100 text-left text-base">{o}</button>
             ))}
           </div>
 

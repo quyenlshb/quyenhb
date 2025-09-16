@@ -30,7 +30,7 @@ export default function VocabManager({ db, user }){
     if(!selected) return alert('Chọn bộ trước');
     const items = [];
     for(const line of lines){
-      const parts = line.split('|').map(p=>p.trim());
+      const parts = line.split(/\s*\|\s*|\t+|\s{2,}/).map(p=>p.trim()).filter(Boolean);
       if(parts.length<3){ alert('Dòng sai định dạng: '+line); return; }
       items.push({ id: 'w'+Date.now()+Math.random(), kanji: parts[0], kana: parts[1], meaning: parts[2], note:'', updatedAt: Date.now()});
     }

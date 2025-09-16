@@ -1,11 +1,12 @@
 import React from 'react';
 
-export default function Header({title, onOpenSettings, user, onLogout}){
+export default function Header({title, onOpenSettings, user, onLogout, onBack, onHome}){
   return (
     <div className="w-full bg-white dark:bg-gray-800 shadow p-3 flex items-center justify-between">
       <div className="flex items-center space-x-3">
-        <button className="text-lg" onClick={()=>window.scrollTo(0,0)}>🏠</button>
-        <div className="font-semibold">{title}</div>
+        <button onClick={onBack} className="text-lg px-2 py-1 bg-gray-100 rounded">←</button>
+        <button onClick={onHome} className="text-lg px-2 py-1 bg-gray-100 rounded">🏠</button>
+        <div className="font-semibold ml-2">{title}</div>
       </div>
       <div className="flex items-center space-x-3">
         {user && <div className="text-sm">Hi, {user.email}</div>}

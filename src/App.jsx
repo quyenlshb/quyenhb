@@ -10,6 +10,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { loadLocal, saveLocal } from './utils/storage';
 
 export default function App(){
+  const handleBack = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
+  const handleHome = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('dashboard'); // dashboard | vocab | quiz | settings | auth
   const [sets, setSets] = useState(() => loadLocal('vocabSets', sampleSets));
@@ -91,7 +93,7 @@ export default function App(){
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <Header title="Học tiếng Nhật" onOpenSettings={()=>setPage('settings')} user={user} onLogout={handleLogout} />
+      <Header title="Học tiếng Nhật" onOpenSettings={()=>setPage('settings')} user={user} onLogout={handleLogout} onBack={handleBack} onHome={handleHome} />
       <div className="p-4">
         {!user && <div className="max-w-md mx-auto"><AuthForm auth={auth} /></div>}
         {user && (
