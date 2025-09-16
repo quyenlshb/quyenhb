@@ -37,10 +37,8 @@ export default function Quiz({ question, options, correctAnswer, onAnswer, timeL
 
   const getButtonClass = (opt) => {
     if (!selectedOption) return 'bg-white/90 hover:bg-blue-200';
-    if (opt === correctAnswer)
-      return 'bg-green-400 text-white font-bold animate-pulse';
-    if (opt === selectedOption && selectedOption !== correctAnswer)
-      return 'bg-red-400 text-white font-bold animate-shake';
+    if (opt === correctAnswer) return 'bg-green-400 text-white font-bold';
+    if (opt === selectedOption && selectedOption !== correctAnswer) return 'bg-red-400 text-white font-bold';
     return 'opacity-50 cursor-not-allowed';
   };
 
@@ -62,19 +60,6 @@ export default function Quiz({ question, options, correctAnswer, onAnswer, timeL
           </button>
         ))}
       </div>
-      {/* Tailwind custom animation */}
-      <style>
-        {`
-          @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            20%, 60% { transform: translateX(-5px); }
-            40%, 80% { transform: translateX(5px); }
-          }
-          .animate-shake {
-            animation: shake 0.5s ease-in-out;
-          }
-        `}
-      </style>
     </div>
   );
 }
