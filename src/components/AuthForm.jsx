@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { googleProvider } from './firebase'; // Import googleProvider
+import { googleProvider } from '../firebase'; // Đi ra ngoài 1 cấp thư mục, sau đó tìm file firebase.
 
 export default function AuthForm({ auth }){
   const [mode, setMode] = useState('login');
