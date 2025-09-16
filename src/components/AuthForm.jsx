@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { googleProvider } from '../firebase'; // Đi ra ngoài 1 cấp thư mục, sau đó tìm file firebase.
+import { googleProvider } from '../firebase'; // Đảm bảo đường dẫn này đúng
 
 export default function AuthForm({ auth }){
   const [mode, setMode] = useState('login');
@@ -50,7 +50,6 @@ export default function AuthForm({ auth }){
         </button>
       </div>
 
-      {/* Thêm nút đăng nhập Google */}
       <div className="mt-6 text-center">
         <div className="relative my-4">
           <div className="absolute inset-0 flex items-center">
