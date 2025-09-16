@@ -9,6 +9,9 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
   const [showNote, setShowNote] = useState(false);
   const [selected, setSelected] = useState(null);
 
+  // Thêm state mới để lưu các lựa chọn
+  const [options, setOptions] = useState([]);
+
   useEffect(() => {
     setTimer(settings.timer);
   }, [settings]);
@@ -24,6 +27,31 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
     }
     return ()=> clearTimeout(t);
   }, [timer, pool, showNote]);
+
+  // useEffect này sẽ chạy mỗi khi `index` hoặc `pool` thay đổi
+  useEffect(() => {
+    if(pool.length > 0) {
+      const current = pool[index];
+      const newOptions = [];
+      newOptions.push(current.meaning);
+
+      // Lấy các đáp án sai ngẫu nhiên
+      while(newOptions.length < 4){
+        const other = pool[Math.floor(Math.random() * pool.length)];
+        if(other && !newOptions.includes(other.meaning)) {
+          newOptions.push(other.meaning);
+        }
+        if(pool.length < 4) break;
+      }
+
+      // Xáo trộn mảng đáp án
+      for(let i = newOptions.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
+      }
+      setOptions(newOptions);
+    }
+  }, [index, pool]);
 
   const start = (setId) => {
     const s = sets.find(x=>x.id===setId);
@@ -92,23 +120,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
         </div>
       </div>
     );
-  }
-
-  // build options
-  const options = [];
-  if(current){
-    options.push(current.meaning);
-    // pick other random meanings
-    while(options.length < 4){
-      const other = pool[Math.floor(Math.random()*pool.length)];
-      if(other && !options.includes(other.meaning)) options.push(other.meaning);
-      if(pool.length<4) break;
-    }
-    // shuffle
-    for(let i=options.length-1;i>0;i--){
-      const j = Math.floor(Math.random()*(i+1));
-      [options[i], options[j]] = [options[j], options[i]];
-    }
   }
 
   return (
