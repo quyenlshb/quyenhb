@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../firebaseClient';
+import { db, auth } from "../firebase";
 import { collection, addDoc, setDoc, doc, getDocs, onSnapshot, deleteDoc } from 'firebase/firestore';
 
 export default function VocabManager(){
