@@ -1,7 +1,7 @@
 import React from 'react';
-import { FaArrowLeft, FaHome, FaCog, FaUserCircle, FaSignOutAlt } from 'react-icons/fa';
+import { FaArrowLeft, FaCog, FaUserCircle, FaSignOutAlt } from 'react-icons/fa';
 
-export default function Header({ title, onOpenSettings, user, onLogout, onBack, onHome, showBackButton, showHomeButton }) {
+export default function Header({ title, onOpenSettings, user, onLogout, onBack, showBackButton }) {
   return (
     <header className="flex items-center justify-between p-4 bg-indigo-600 text-white shadow-lg sticky top-0 z-10">
       <div className="flex items-center space-x-3">
@@ -10,12 +10,7 @@ export default function Header({ title, onOpenSettings, user, onLogout, onBack, 
             <FaArrowLeft />
           </button>
         )}
-        {showHomeButton && (
-          <button onClick={onHome} className="text-xl p-2 hover:bg-indigo-700 rounded-full transition">
-            <FaHome />
-          </button>
-        )}
-        {!showBackButton && !showHomeButton && (
+        {!showBackButton && (
           <div className="text-2xl font-bold">{title}</div>
         )}
       </div>

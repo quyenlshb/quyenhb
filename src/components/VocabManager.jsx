@@ -22,7 +22,7 @@ export default function VocabManager({ user, db }) {
       });
       return () => unsub();
     }
-  }, [user, db]);
+  }, [user, db, selected]);
 
   const addSet = async () => {
     if (!user) {
@@ -88,8 +88,8 @@ export default function VocabManager({ user, db }) {
     }
   };
 
-  const sortedSets = [...sets].sort((a, b) => b.updatedAt - a.updatedAt);
-  const sortedItems = selected ? [...selected.items].sort((a, b) => a.masteryLevel - b.masteryLevel) : [];
+  const sortedSets = [...sets].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const sortedItems = selected ? [...selected.items].sort((a, b) => (a.masteryLevel || 0) - (b.masteryLevel || 0)) : [];
 
   return (
     <div className="p-4 rounded-xl shadow-md bg-white dark:bg-gray-800">
