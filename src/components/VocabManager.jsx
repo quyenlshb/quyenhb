@@ -66,7 +66,6 @@ export default function VocabManager({ db, user }) {
     }
   };
 
-  // Sắp xếp các từ trong bộ từ được chọn theo masteryLevel từ thấp đến cao
   const sortedItems = selected ? [...selected.items].sort((a, b) => a.masteryLevel - b.masteryLevel) : [];
 
   return (
@@ -94,7 +93,8 @@ export default function VocabManager({ db, user }) {
                   <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500 dark:text-gray-400">{it.kana}</span></div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">{it.meaning}</div>
                 </div>
-                <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                {/* Đảm bảo ML không bị ẩn bằng flex-shrink-0 và thêm khoảng cách */}
+                <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400 pl-4 flex-shrink-0">
                   ML: {it.masteryLevel}
                 </div>
               </div>
