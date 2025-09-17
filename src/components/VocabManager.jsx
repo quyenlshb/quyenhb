@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { loadLocal, saveLocal } from './utils/storage';
+import { loadLocal, saveLocal } from '../utils/storage'; // Đường dẫn đã sửa
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { nanoid } from 'nanoid';
@@ -271,7 +271,7 @@ export default function VocabManager({ user, db }) {
                 ) : (
                   <>
                     <div>
-                      <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500 dark:text-gray-400">{it.kana}</span></div>
+                      <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500 dark:text-gray-400">({it.kana})</span></div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">{it.meaning}</div>
                     </div>
                     <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400 pl-4 flex-shrink-0 flex space-x-2">

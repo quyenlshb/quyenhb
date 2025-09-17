@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { doc, updateDoc } from 'firebase/firestore';
 import { FaPlay } from 'react-icons/fa';
-import { loadLocal, saveLocal } from './utils/storage'; // Đã sửa đường dẫn tại đây
+import { loadLocal, saveLocal } from '../utils/storage'; // Đường dẫn đã sửa
 
 export default function Quiz({ sets, settings, onFinish, user, db }) {
   const [activeSetId, setActiveSetId] = useState(null);
