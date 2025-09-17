@@ -19,15 +19,6 @@ export default function VocabManager({ user, db }) {
         if (docSnap.exists()) {
           const fetchedSets = docSnap.data().sets || [];
           setSets(fetchedSets);
-          if (selected) {
-            // Cập nhật 'selected' mà không gây vòng lặp vô hạn
-            const newSelected = fetchedSets.find(s => s.id === selected.id);
-            if (newSelected) {
-              setSelected(newSelected);
-            } else {
-              setSelected(null);
-            }
-          }
         }
       });
       return () => unsub();
@@ -35,6 +26,18 @@ export default function VocabManager({ user, db }) {
       setSets(loadLocal('vocabSets', []));
     }
   }, [user, db]);
+
+  // This useEffect will update the 'selected' item whenever 'sets' changes, but without causing a loop.
+  useEffect(() => {
+    if (selected && sets.length > 0) {
+      const updatedSelected = sets.find(s => s.id === selected.id);
+      if (updatedSelected) {
+        setSelected(updatedSelected);
+      } else {
+        setSelected(null);
+      }
+    }
+  }, [sets]);
 
   const addSet = async () => {
     if (!user) {
@@ -90,7 +93,6 @@ export default function VocabManager({ user, db }) {
     const userDocRef = doc(db, 'vocabData', user.uid);
     try {
       await updateDoc(userDocRef, { sets: updatedSets });
-      setSelected(updatedSets.find(s => s.id === setId));
       toast.success('Đã đổi tên bộ từ thành công!');
     } catch (e) {
       console.error('Lỗi khi đổi tên bộ từ:', e);
@@ -113,7 +115,6 @@ export default function VocabManager({ user, db }) {
       const userDocRef = doc(db, 'vocabData', user.uid);
       try {
         await updateDoc(userDocRef, { sets: updatedSets });
-        setSelected(updatedSets.find(s => s.id === selected.id));
         toast.success('Đã xóa từ thành công!');
       } catch (e) {
         console.error('Lỗi khi xóa từ:', e);
@@ -137,7 +138,6 @@ export default function VocabManager({ user, db }) {
     try {
       await updateDoc(userDocRef, { sets: updatedSets });
       setEditingItem(null);
-      setSelected(updatedSets.find(s => s.id === selected.id));
       toast.success('Đã cập nhật từ thành công!');
     } catch (e) {
       console.error('Lỗi khi cập nhật từ:', e);
@@ -187,7 +187,6 @@ export default function VocabManager({ user, db }) {
     try {
       await updateDoc(userDocRef, { sets: updatedSets });
       setPaste('');
-      setSelected({ ...selected, items: [...selected.items, ...items] });
       toast.success(`Đã thêm ${items.length} từ vựng mới vào bộ từ.`);
     } catch (e) {
       console.error('Lỗi khi import:', e);
