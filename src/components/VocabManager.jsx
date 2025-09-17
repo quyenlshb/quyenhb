@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { loadLocal, saveLocal } from '../utils/storage'; // Đường dẫn đã sửa
+import { loadLocal, saveLocal } from '../utils/storage';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { nanoid } from 'nanoid';
@@ -28,7 +28,7 @@ export default function VocabManager({ user, db }) {
     } else {
         setSets(loadLocal('vocabSets', []));
     }
-  }, [user, db, selected]);
+  }, [user, db]); // Đã loại bỏ 'selected' khỏi mảng phụ thuộc để tránh lỗi treo
 
   const addSet = async () => {
     if (!user) {
@@ -110,8 +110,8 @@ export default function VocabManager({ user, db }) {
         setSelected(updatedSets.find(s => s.id === selected.id));
         toast.success('Đã xóa từ thành công!');
       } catch (e) {
-        console.error('Lỗi khi xóa từ:', e);
-        toast.error('Đã xảy ra lỗi!');
+      console.error('Lỗi khi xóa từ:', e);
+      toast.error('Đã xảy ra lỗi!');
       }
     }
   };
