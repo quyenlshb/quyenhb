@@ -7,8 +7,8 @@ import SettingsPanel from './components/SettingsPanel';
 import { sampleSets } from './data/wordSets';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { loadLocal, saveLocal } from './utils/storage';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { loadLocal, saveLocal, getLocalMeta } from './utils/storage';
 import { toast } from 'react-toastify';
 
 export default function App() {
@@ -21,7 +21,7 @@ export default function App() {
   const [totalPoints, setTotalPoints] = useState(() => loadLocal('totalPoints', 0));
   const [streak, setStreak] = useState(() => loadLocal('streak', 0));
   const [lastPractice, setLastPractice] = useState(() => loadLocal('lastPractice', null));
-  
+
   const handleBack = () => { setPage('dashboard'); window.scrollTo(0, 0); };
   const handleHome = () => { setPage('dashboard'); window.scrollTo(0, 0); };
   const handleOpenSettings = () => { setPage('settings'); };
@@ -36,20 +36,29 @@ export default function App() {
   const handleUpdatePoints = (newPoints) => {
     const today = getLocalDate(Date.now());
     const lastDay = getLocalDate(lastPractice);
+
     let newStreak = streak;
-    if (lastDay && today !== lastDay) {
-        if ((new Date(today) - new Date(lastDay)) / (1000 * 60 * 60 * 24) === 1) {
+    if (lastDay) {
+        const lastDate = new Date(lastDay);
+        const todayDate = new Date(today);
+        const dayDifference = (todayDate - lastDate) / (1000 * 60 * 60 * 24);
+
+        if (dayDifference === 1) {
             newStreak++;
-        } else {
-            newStreak = 1;
+        } else if (dayDifference > 1) {
+            newStreak = 1; // Start a new streak
         }
-    } else if (!lastDay) {
-        newStreak = 1;
+    } else {
+        newStreak = 1; // First time practicing, start a streak
     }
+
+    const newPointsToday = pointsToday + newPoints;
+    const newTotalPoints = totalPoints + newPoints;
+
     setLastPractice(Date.now());
     setStreak(newStreak);
-    setPointsToday(p => p + newPoints);
-    setTotalPoints(p => p + newPoints);
+    setPointsToday(newPointsToday);
+    setTotalPoints(newTotalPoints);
     toast.success(`+${newPoints} điểm! Bạn đang có chuỗi học liên tiếp ${newStreak} ngày!`);
   };
 
@@ -81,7 +90,7 @@ export default function App() {
 
   const syncFromFirestore = async () => {
     if (!user) {
-      setLoading(false); // Thêm dòng này để xử lý trường hợp không có người dùng
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -90,33 +99,37 @@ export default function App() {
       const userSnap = await getDoc(userRef);
       const vocabRef = doc(db, 'vocabData', user.uid);
       const vocabSnap = await getDoc(vocabRef);
+      const settingsRef = doc(db, 'settings', user.uid);
+      const settingsSnap = await getDoc(settingsRef);
 
-      const localUserMeta = loadLocal('userMeta', null);
-      const localVocabMeta = loadLocal('vocabSets', null);
-      const localSettings = loadLocal('settings', null);
+      const localUserMeta = getLocalMeta('pointsToday'); // Lấy meta từ một key bất kỳ để kiểm tra
+      const localVocabMeta = getLocalMeta('vocabSets');
+      const localSettingsMeta = getLocalMeta('settings');
 
       if (userSnap.exists()) {
         const remoteData = userSnap.data();
-        if (!localUserMeta || (remoteData.lastSync > (localUserMeta.updatedAt || 0))) {
-          setPointsToday(remoteData.pointsToday);
-          setTotalPoints(remoteData.totalPoints);
-          setStreak(remoteData.streak);
-          setLastPractice(remoteData.lastPractice);
-          saveLocal('pointsToday', remoteData.pointsToday);
-          saveLocal('totalPoints', remoteData.totalPoints);
-          saveLocal('streak', remoteData.streak);
-          saveLocal('lastPractice', remoteData.lastPractice);
+        if (!localUserMeta || (remoteData.lastSync || 0) > (localUserMeta.updatedAt || 0)) {
+          setPointsToday(remoteData.pointsToday || 0);
+          setTotalPoints(remoteData.totalPoints || 0);
+          setStreak(remoteData.streak || 0);
+          setLastPractice(remoteData.lastPractice || null);
+          saveLocal('pointsToday', remoteData.pointsToday || 0);
+          saveLocal('totalPoints', remoteData.totalPoints || 0);
+          saveLocal('streak', remoteData.streak || 0);
+          saveLocal('lastPractice', remoteData.lastPractice || null);
           toast.info('Đã đồng bộ dữ liệu người dùng mới nhất từ server.');
         } else {
           syncToFirestore();
         }
+      } else {
+          syncToFirestore();
       }
 
       if (vocabSnap.exists()) {
         const remoteVocab = vocabSnap.data();
-        if (!localVocabMeta || (remoteVocab.lastSync > (localVocabMeta.updatedAt || 0))) {
-          setSets(remoteVocab.sets);
-          saveLocal('vocabSets', remoteVocab.sets);
+        if (!localVocabMeta || (remoteVocab.lastSync || 0) > (localVocabMeta.updatedAt || 0)) {
+          setSets(remoteVocab.sets || []);
+          saveLocal('vocabSets', remoteVocab.sets || []);
           toast.info('Đã đồng bộ dữ liệu từ vựng mới nhất từ server.');
         } else {
           syncVocabToFirestore(sets);
@@ -125,12 +138,13 @@ export default function App() {
         syncVocabToFirestore(sets);
       }
       
-      const settingsRef = doc(db, 'settings', user.uid);
-      const settingsSnap = await getDoc(settingsRef);
-      if (settingsSnap.exists() && (!localSettings || (settingsSnap.data().updatedAt > (localSettings.updatedAt || 0)))) {
-        setSettings(settingsSnap.data().data);
-        saveLocal('settings', settingsSnap.data().data);
-        toast.info('Đã đồng bộ cài đặt mới nhất từ server.');
+      if (settingsSnap.exists()) {
+        const remoteSettings = settingsSnap.data();
+        if (!localSettingsMeta || (remoteSettings.updatedAt || 0) > (localSettingsMeta.updatedAt || 0)) {
+          setSettings(remoteSettings.data || {});
+          saveLocal('settings', remoteSettings.data || {});
+          toast.info('Đã đồng bộ cài đặt mới nhất từ server.');
+        }
       }
       
     } catch (e) {
@@ -189,7 +203,7 @@ export default function App() {
       case 'dashboard':
         const today = getLocalDate(Date.now());
         const lastDay = getLocalDate(lastPractice);
-        const dailyGoal = settings.dailyTarget;
+        const dailyGoal = settings?.dailyTarget || 30;
         const progress = (pointsToday / dailyGoal) * 100;
 
         // Reset daily points if a new day has started
