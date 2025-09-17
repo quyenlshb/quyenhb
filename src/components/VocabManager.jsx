@@ -19,16 +19,25 @@ export default function VocabManager({ user, db }) {
         if (docSnap.exists()) {
           const fetchedSets = docSnap.data().sets || [];
           setSets(fetchedSets);
-          if (selected) {
-            setSelected(fetchedSets.find(s => s.id === selected.id) || null);
-          }
         }
       });
       return () => unsub();
     } else {
         setSets(loadLocal('vocabSets', []));
     }
-  }, [user, db]); // Đã loại bỏ 'selected' khỏi mảng phụ thuộc để tránh lỗi treo
+  }, [user, db]); // Đã loại bỏ 'selected' khỏi mảng phụ thuộc và bỏ logic gây lỗi
+
+  // Logic cập nhật selected khi sets thay đổi
+  useEffect(() => {
+    if (selected && sets.length > 0) {
+      const updatedSelected = sets.find(s => s.id === selected.id);
+      if (updatedSelected) {
+        setSelected(updatedSelected);
+      } else {
+        setSelected(null);
+      }
+    }
+  }, [sets, selected]);
 
   const addSet = async () => {
     if (!user) {
