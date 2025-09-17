@@ -3,7 +3,7 @@ import Header from './components/Header';
 import AuthForm from './components/AuthForm';
 import VocabManager from './components/VocabManager';
 import Quiz from './components/Quiz';
-import SettingsPanel from './components/SettingsPanel'; // Import SettingsPanel
+import SettingsPanel from './components/SettingsPanel';
 import { sampleSets } from './data/wordSets';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -20,7 +20,6 @@ export default function App() {
   const [pointsToday, setPointsToday] = useState(() => loadLocal('pointsToday', 0));
   const [totalPoints, setTotalPoints] = useState(() => loadLocal('totalPoints', 0));
   const [streak, setStreak] = useState(() => loadLocal('streak', 0));
-  const [lastSync, setLastSync] = useState(() => loadLocal('lastSync', 0));
   const [lastPractice, setLastPractice] = useState(() => loadLocal('lastPractice', null));
   
   const handleBack = () => { setPage('dashboard'); window.scrollTo(0, 0); };
@@ -81,7 +80,10 @@ export default function App() {
   };
 
   const syncFromFirestore = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false); // Thêm dòng này để xử lý trường hợp không có người dùng
+      return;
+    }
     setLoading(true);
     try {
       const userRef = doc(db, 'users', user.uid);
@@ -95,7 +97,7 @@ export default function App() {
 
       if (userSnap.exists()) {
         const remoteData = userSnap.data();
-        if (!localUserMeta || remoteData.lastSync > localUserMeta.updatedAt) {
+        if (!localUserMeta || (remoteData.lastSync > (localUserMeta.updatedAt || 0))) {
           setPointsToday(remoteData.pointsToday);
           setTotalPoints(remoteData.totalPoints);
           setStreak(remoteData.streak);
@@ -112,7 +114,7 @@ export default function App() {
 
       if (vocabSnap.exists()) {
         const remoteVocab = vocabSnap.data();
-        if (!localVocabMeta || remoteVocab.lastSync > localVocabMeta.updatedAt) {
+        if (!localVocabMeta || (remoteVocab.lastSync > (localVocabMeta.updatedAt || 0))) {
           setSets(remoteVocab.sets);
           saveLocal('vocabSets', remoteVocab.sets);
           toast.info('Đã đồng bộ dữ liệu từ vựng mới nhất từ server.');
@@ -125,7 +127,7 @@ export default function App() {
       
       const settingsRef = doc(db, 'settings', user.uid);
       const settingsSnap = await getDoc(settingsRef);
-      if (settingsSnap.exists() && (!localSettings || settingsSnap.data().updatedAt > localSettings.updatedAt)) {
+      if (settingsSnap.exists() && (!localSettings || (settingsSnap.data().updatedAt > (localSettings.updatedAt || 0)))) {
         setSettings(settingsSnap.data().data);
         saveLocal('settings', settingsSnap.data().data);
         toast.info('Đã đồng bộ cài đặt mới nhất từ server.');
