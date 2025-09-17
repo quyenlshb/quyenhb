@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { nanoid } from 'nanoid';
 
@@ -8,13 +8,16 @@ export default function VocabManager({ user, db }) {
   const [selected, setSelected] = useState(null);
   const [paste, setPaste] = useState('');
 
-  // Lắng nghe dữ liệu sets từ component cha (App.jsx)
   useEffect(() => {
     if (user) {
       const userDocRef = doc(db, 'vocabData', user.uid);
       const unsub = onSnapshot(userDocRef, (docSnap) => {
         if (docSnap.exists()) {
-          setSets(docSnap.data().sets || []);
+          const fetchedSets = docSnap.data().sets || [];
+          setSets(fetchedSets);
+          if (selected) {
+            setSelected(fetchedSets.find(s => s.id === selected.id) || null);
+          }
         }
       });
       return () => unsub();

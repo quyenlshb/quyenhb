@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { FaPlay, FaArrowLeft } from 'react-icons/fa';
 
 export default function Quiz({ sets, settings, onFinish, user, db }) {
@@ -54,7 +54,7 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
       setOptions(newOptions);
       setTimer(settings.timer);
     }
-  }, [pool, index, settings.timer]);
+  }, [pool, index, settings.timer, sets]);
 
   useEffect(() => {
     if (pool.length > 0 && timer > 0 && selected === null) {
@@ -74,7 +74,6 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
     if (isCorrect) {
       setCorrectAnswers(c => c + 1);
       toast.success('Chính xác!');
-      // Update mastery level on Firebase
       const current = pool[index];
       const userDocRef = doc(db, 'vocabData', user.uid);
       const docSnap = await getDoc(userDocRef);
