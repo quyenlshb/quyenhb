@@ -35,22 +35,28 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
     return ()=> clearTimeout(t);
   }, [timer, pool, showNote, selected]);
 
+  // Logic tạo đáp án đã được sửa
   useEffect(() => {
-    if(pool.length > 0) {
+    if (pool.length > 0) {
       const current = pool[index];
-      const newOptions = [];
-      newOptions.push(current.meaning);
-      while(newOptions.length < 4){
-        const other = pool[Math.floor(Math.random() * pool.length)];
-        if(other && !newOptions.includes(other.meaning)) {
-          newOptions.push(other.meaning);
+      const allMeanings = sets.flatMap(set => set.items.map(item => item.meaning));
+      const uniqueMeanings = [...new Set(allMeanings)];
+
+      const correctMeaning = current.meaning;
+      const incorrectOptions = [];
+
+      while (incorrectOptions.length < 3 && uniqueMeanings.length > 1) {
+        const randomMeaning = uniqueMeanings[Math.floor(Math.random() * uniqueMeanings.length)];
+        if (randomMeaning !== correctMeaning && !incorrectOptions.includes(randomMeaning)) {
+          incorrectOptions.push(randomMeaning);
         }
-        if(pool.length <= 4) break;
       }
+
+      const newOptions = [correctMeaning, ...incorrectOptions];
       newOptions.sort(() => Math.random() - 0.5);
       setOptions(newOptions);
     }
-  }, [index, pool]);
+  }, [index, pool, sets]);
 
   const start = (setId) => {
     const s = sets.find(x=>x.id===setId);
@@ -81,7 +87,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
     const isCorrect = choice === current.meaning;
     setSelected(choice);
     if(isCorrect){
-      onUpdatePoints(1); // Dòng này gửi điểm lên App.jsx
+      onUpdatePoints(1);
       toast.success('Chính xác! +1 điểm', { autoClose: 1500 });
       setTimeout(() => {
         setIndex(i => i + 1);
