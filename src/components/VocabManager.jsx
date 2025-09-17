@@ -27,17 +27,7 @@ export default function VocabManager({ user, db }) {
     }
   }, [user, db]);
 
-  // This useEffect will update the 'selected' item whenever 'sets' changes, but without causing a loop.
-  useEffect(() => {
-    if (selected && sets.length > 0) {
-      const updatedSelected = sets.find(s => s.id === selected.id);
-      if (updatedSelected) {
-        setSelected(updatedSelected);
-      } else {
-        setSelected(null);
-      }
-    }
-  }, [sets]);
+  // Xóa bỏ đoạn useEffect gây lỗi tại đây.
 
   const addSet = async () => {
     if (!user) {
