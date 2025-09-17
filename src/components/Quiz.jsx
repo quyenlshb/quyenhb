@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { FaPlay, FaArrowLeft } from 'react-icons/fa';
+import { doc, updateDoc } from 'firebase/firestore';
 
 export default function Quiz({ sets, settings, onFinish, user, db }) {
   const [activeSetId, setActiveSetId] = useState(null);
@@ -29,128 +28,169 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
       toast.error('Bộ từ này không có từ nào để luyện tập.');
       return;
     }
-
     const sortedWords = activeSet.items.sort((a, b) => a.masteryLevel - b.masteryLevel);
     const quizPool = sortedWords.slice(0, settings.perSession);
-    if (quizPool.length === 0) {
-      toast.error('Không đủ từ để luyện tập. Hãy thêm từ vựng mới hoặc reset mastery level.');
-      return;
-    }
+    
     setPool(quizPool);
     setActiveSetId(setId);
     setIndex(0);
     setCorrectAnswers(0);
     setShowNote(false);
     setSelected(null);
+    if (quizPool.length > 0) {
+      generateOptions(quizPool[0]);
+    }
   };
 
-  useEffect(() => {
-    if (pool.length > 0) {
-      const current = pool[index];
-      const correctOption = current.meaning;
-      const otherMeanings = sets.flatMap(s => s.items).filter(item => item.id !== current.id).map(item => item.meaning);
-      const shuffledOthers = otherMeanings.sort(() => 0.5 - Math.random()).slice(0, 3);
-      const newOptions = [...shuffledOthers, correctOption].sort(() => 0.5 - Math.random());
-      setOptions(newOptions);
-      setTimer(settings.timer);
-    }
-  }, [pool, index, settings.timer, sets]);
+  const generateOptions = (current) => {
+    const allItems = sets.flatMap(s => s.items);
+    const incorrectItems = allItems.filter(item => item.id !== current.id);
+    const shuffledIncorrect = incorrectItems.sort(() => 0.5 - Math.random());
+    const randomOptions = shuffledIncorrect.slice(0, 3).map(i => i.meaning);
+    const newOptions = [...randomOptions, current.meaning];
+    setOptions(newOptions.sort(() => 0.5 - Math.random()));
+  };
 
-  useEffect(() => {
-    if (pool.length > 0 && timer > 0 && selected === null) {
-      const timerId = setInterval(() => setTimer(t => t - 1), 1000);
-      return () => clearInterval(timerId);
-    } else if (timer === 0) {
-      setSelected('timeout');
-      setShowNote(true);
-    }
-  }, [timer, pool, selected]);
+  const handleAnswer = (answer) => {
+    setSelected(answer);
+    if (answer === pool[index].meaning) {
+      setCorrectAnswers(correctAnswers + 1);
+      setShowNote(false);
+      
+      const newMasteryLevel = (pool[index].masteryLevel || 0) + 1;
+      updateWordMastery(pool[index].id, newMasteryLevel);
 
-  const checkAnswer = async (option) => {
-    if (selected !== null) return;
-    const isCorrect = option === pool[index].meaning;
-    setSelected(option);
-    setShowNote(true);
-    if (isCorrect) {
-      setCorrectAnswers(c => c + 1);
-      toast.success('Chính xác!');
-      const current = pool[index];
-      const userDocRef = doc(db, 'vocabData', user.uid);
-      const docSnap = await getDoc(userDocRef);
-      if (docSnap.exists()) {
-        const userData = docSnap.data();
-        const updatedSets = userData.sets.map(s => {
-          if (s.id === activeSetId) {
-            s.items = s.items.map(item =>
-              item.id === current.id ? { ...item, masteryLevel: (item.masteryLevel || 0) + 1, lastReviewedAt: Date.now() } : item
-            );
-          }
-          return s;
-        });
-        await updateDoc(userDocRef, { sets: updatedSets });
-      }
+      setTimeout(() => {
+        nextQuestion();
+      }, 500);
     } else {
-      toast.error('Sai rồi...');
+      setShowNote(true);
+      const newMasteryLevel = Math.max(0, (pool[index].masteryLevel || 0) - 1);
+      updateWordMastery(pool[index].id, newMasteryLevel);
+    }
+    
+    // Stop timer
+    setTimer(settings.timer);
+  };
+  
+  const updateWordMastery = async (wordId, newMasteryLevel) => {
+    if (!user) return;
+    try {
+      const userDocRef = doc(db, 'vocabData', user.uid);
+      const updatedSets = sets.map(s => {
+        if (s.id === activeSetId) {
+          s.items = s.items.map(item => {
+            if (item.id === wordId) {
+              return { ...item, masteryLevel: newMasteryLevel, lastReviewedAt: Date.now() };
+            }
+            return item;
+          });
+        }
+        return s;
+      });
+      await updateDoc(userDocRef, { sets: updatedSets });
+    } catch(e) {
+      console.error("Lỗi khi cập nhật mastery level: ", e);
+      toast.error("Lỗi khi cập nhật tiến độ.");
+    }
+  };
+
+  const saveNote = async (newNote) => {
+    if (!user || !selected) return;
+    try {
+      const userDocRef = doc(db, 'vocabData', user.uid);
+      const updatedSets = sets.map(s => {
+        if (s.id === activeSetId) {
+          s.items = s.items.map(item => {
+            if (item.id === pool[index].id) {
+              return { ...item, note: newNote, updatedAt: Date.now() };
+            }
+            return item;
+          });
+        }
+        return s;
+      });
+      await updateDoc(userDocRef, { sets: updatedSets });
+      toast.success('Đã lưu ghi chú!');
+    } catch(e) {
+      console.error("Lỗi khi lưu ghi chú: ", e);
+      toast.error("Lỗi khi lưu ghi chú!");
     }
   };
 
   const nextQuestion = () => {
-    if (index < pool.length - 1) {
-      setIndex(i => i + 1);
-      setSelected(null);
-      setShowNote(false);
+    setSelected(null);
+    setShowNote(false);
+    if (index + 1 < pool.length) {
+      setIndex(index + 1);
+      generateOptions(pool[index + 1]);
+      setTimer(settings.timer);
     } else {
       onFinish(correctAnswers);
     }
   };
 
-  const current = pool[index];
+  useEffect(() => {
+    if (pool.length > 0 && timer > 0 && selected === null) {
+      const countdown = setInterval(() => {
+        setTimer(t => t - 1);
+      }, 1000);
+      return () => clearInterval(countdown);
+    } else if (timer === 0 && selected === null) {
+      handleAnswer(''); // Simulate wrong answer on timeout
+    }
+  }, [pool, timer, selected]);
 
   if (sets.length === 0) {
     return (
-      <div className="text-center p-4">
-        <p className="text-gray-500">Vui lòng thêm bộ từ vựng trước khi bắt đầu luyện tập.</p>
+      <div className="p-4 text-center">
+        <p className="text-gray-500">Vui lòng thêm bộ từ trong trang Quản lý Từ vựng.</p>
       </div>
     );
   }
 
   if (pool.length === 0) {
     return (
-      <div className="p-4 bg-white rounded-xl shadow-md">
-        <h3 className="text-lg font-bold mb-3">Chọn bộ từ vựng</h3>
-        {sets.map(s => (
-          <button
-            key={s.id}
-            onClick={() => generateQuiz(s.id)}
-            className="w-full px-4 py-2 my-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
-          >
-            {s.name} ({s.items.length})
-          </button>
-        ))}
+      <div className="p-4 text-center">
+        <h3 className="text-xl font-bold mb-4">Chọn bộ từ để luyện tập</h3>
+        <div className="space-y-3">
+          {sets.map(s => (
+            <button key={s.id} onClick={() => generateQuiz(s.id)} className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow hover:bg-indigo-700 transition">
+              {s.name} ({s.items.length} từ)
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
 
+  const current = pool[index];
+  const progress = ((index + 1) / pool.length) * 100;
+  
   return (
-    <div className="p-4 bg-white rounded-xl shadow-md">
-      <div className="text-center mb-4">
-        <div className="text-sm text-gray-500">Câu hỏi {index + 1}/{pool.length}</div>
-        <div className="text-lg font-bold text-red-500">Thời gian: {timer}s</div>
+    <div className="p-4">
+      <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
       </div>
-      <div className="text-center">
-        <h2 className="text-4xl font-extrabold mb-2">{current.kanji}</h2>
-        <p className="text-2xl text-gray-600 mb-4">{current.kana}</p>
-        <button onClick={playKana} className="text-xl p-2 bg-indigo-500 text-white rounded-full hover:bg-indigo-600 transition">
-          <FaPlay />
+      <div className="text-center mb-4">
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Câu {index + 1} / {pool.length}</span>
+        <span className="ml-4 text-sm font-medium text-red-500">Time: {timer}s</span>
+      </div>
+      <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center">
+        <h3 className="text-4xl font-bold mb-4">
+          {current.kanji}
+        </h3>
+        <button onClick={playKana} className="text-xl p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+            <FaPlay />
         </button>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         {options.map(o => (
           <button
             key={o}
-            onClick={() => checkAnswer(o)}
-            className={`p-3 rounded-lg shadow transition ${selected === o ? (o === current.meaning ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'} `}
+            onClick={() => handleAnswer(o)}
+            className={`p-4 rounded-lg font-semibold text-lg transition ${selected ? (o === current.meaning ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700 dark:bg-gray-600 dark:text-gray-300') : 'bg-blue-500 text-white hover:bg-blue-600'} `}
             disabled={selected !== null}
           >
             {o}
@@ -166,25 +206,7 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
           </div>
           <textarea
             defaultValue={current.note}
-            onBlur={async (e) => {
-              if (!user) {
-                toast.error('Vui lòng đăng nhập để lưu ghi chú!');
-                return;
-              }
-              const userDocRef = doc(db, 'vocabData', user.uid);
-              const docSnap = await getDoc(userDocRef);
-              if (docSnap.exists()) {
-                const userData = docSnap.data();
-                const updatedSets = userData.sets.map(s => {
-                  if (s.id === activeSetId) {
-                    s.items = s.items.map(it => it.id === current.id ? { ...it, note: e.target.value, updatedAt: Date.now() } : it);
-                  }
-                  return s;
-                });
-                await updateDoc(userDocRef, { sets: updatedSets });
-                toast.success('Đã lưu ghi chú!');
-              }
-            }}
+            onBlur={(e) => saveNote(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded-lg mt-3 text-gray-800 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="Thêm ghi chú cá nhân..."
           ></textarea>
