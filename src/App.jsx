@@ -14,6 +14,7 @@ export default function App(){
   const handleBack = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
   const handleHome = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState('dashboard');
   const [sets, setSets] = useState(() => loadLocal('vocabSets', sampleSets));
   const [settings, setSettings] = useState(() => loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
@@ -34,6 +35,7 @@ export default function App(){
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
+      setLoading(true);
       setUser(u);
       if(u && navigator.onLine){
         try{
@@ -54,6 +56,7 @@ export default function App(){
           }
         }catch(e){ console.log('sync err', e); }
       }
+      setLoading(false);
     });
     return ()=> unsub();
   },[]);
@@ -101,83 +104,45 @@ export default function App(){
         showBackButton={showBackButton}
         showHomeButton={showHomeButton}
       />
-      <div className="p-4">
-        {!user && <div className="max-w-md mx-auto"><AuthForm auth={auth} /></div>}
-        {user && (
-          <>
-            {page === 'dashboard' && (
-              <div className="space-y-4">
-                <div className="bg-gradient-to-r from-yellow-400 to-red-400 text-white rounded-xl p-4">
-                  <div className="text-xl">🔥 Streak: {streak} ngày</div>
-                  <div className="mt-2">🎯 Mục tiêu: {settings.dailyTarget} điểm</div>
-                  <div className="mt-2 bg-white/30 rounded-full h-3 overflow-hidden">
-                    <div style={{width: `${Math.min(100, (pointsToday/settings.dailyTarget)*100)}%`}} className="bg-white h-3"></div>
-                  </div>
-                  <div className="mt-2 text-sm">{pointsToday}/{settings.dailyTarget} hôm nay</div>
-                </div>
-
-                <div className="bg-white rounded-xl p-3 shadow">
-                  <div className="font-semibold mb-2">Các bộ từ</div>
-                  {sets.map(s=>(
-                    <div key={s.id} className="flex items-center justify-between p-2 border-b">
-                      <div>{s.name}</div>
-                      <div className="space-x-2">
-                        <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded" onMouseDown={()=>{ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
-                        <button onClick={()=> setPage('vocab')} className="px-3 py-1 bg-gray-200 rounded">Quản lý ✏️</button>
-                      </div>
+      {loading && (
+        <div className="flex items-center justify-center p-6 min-h-screen-minus-header">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500 mb-4"></div>
+            <div className="text-xl font-medium text-gray-700">Đang tải...</div>
+          </div>
+        </div>
+      )}
+      {!loading && (
+        <div className="p-4">
+          {!user && <div className="max-w-md mx-auto"><AuthForm auth={auth} /></div>}
+          {user && (
+            <>
+              {page === 'dashboard' && (
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-r from-yellow-400 to-red-400 text-white rounded-xl p-4">
+                    <div className="text-xl">🔥 Streak: {streak} ngày</div>
+                    <div className="mt-2">🎯 Mục tiêu: {settings.dailyTarget} điểm</div>
+                    <div className="mt-2 bg-white/30 rounded-full h-3 overflow-hidden">
+                      <div style={{width: `${Math.min(100, (pointsToday/settings.dailyTarget)*100)}%`}} className="bg-white h-3"></div>
                     </div>
-                  ))}
-                  <div className="mt-3 text-center">
-                    <button onClick={()=> setPage('vocab')} className="px-4 py-2 bg-blue-500 text-white rounded">+ Thêm / Import bộ từ</button>
+                    <div className="mt-2 text-sm">{pointsToday}/{settings.dailyTarget} hôm nay</div>
                   </div>
+
+                  <div className="bg-white rounded-xl p-3 shadow">
+                    <div className="font-semibold mb-2">Các bộ từ</div>
+                    {sets.map(s=>(
+                      <div key={s.id} className="flex items-center justify-between p-2 border-b">
+                        <div>{s.name}</div>
+                        <div className="space-x-2">
+                          <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded" onMouseDown={()=>{ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
+                          <button onClick={()=> setPage('vocab')} className="px-3 py-1 bg-gray-200 rounded">Quản lý ✏️</button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="mt-3 text-center">
+                      <button onClick={()=> setPage('vocab')} className="px-4 py-2 bg-blue-500 text-white rounded">+ Thêm / Import bộ từ</button>
+                    </div>
+                  </div>
+
+                  <div className="text-center text-sm text-gray-500">Tổng điểm: {totalPoints}</div>
                 </div>
-
-                <div className="text-center text-sm text-gray-500">Tổng điểm: {totalPoints}</div>
-              </div>
-            )}
-
-            {page === 'vocab' && <div className='max-w-xl mx-auto'><VocabManager db={db} user={user} /></div>}
-
-            {page === 'quiz' && <div className='max-w-xl mx-auto'><Quiz sets={sets} settings={settings} onFinish={finishSession} onUpdatePoints={updatePoints} /></div>}
-
-            {page === 'settings' && <div className='max-w-md mx-auto'><SettingsPanel settings={settings} setSettings={setSettings} /></div>}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SettingsPanel({ settings, setSettings }){
-  const [timer, setTimer] = useState(settings.timer || 10);
-  const [perSession, setPerSession] = useState(settings.perSession || 10);
-  const [dailyTarget, setDailyTarget] = useState(settings.dailyTarget || 30);
-
-  useEffect(()=>{},[]);
-
-  const save = () => {
-    if(dailyTarget < (settings.dailyTarget || 0)){
-      toast.error('Mục tiêu chỉ có thể tăng, không thể giảm');
-      return;
-    }
-    const ns = {...settings, timer, perSession, dailyTarget};
-    setSettings(ns);
-    saveLocal('settings', ns);
-    toast.success('Đã lưu cài đặt!');
-  };
-
-  return (
-    <div className="p-4 bg-white rounded shadow">
-      <h3 className="font-semibold mb-3">Cài đặt</h3>
-      <label className="block text-sm">Thời gian mỗi câu (giây)</label>
-      <input type="number" value={timer} onChange={e=>setTimer(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
-      <label className="block text-sm">Số từ mỗi lần</label>
-      <input type="number" value={perSession} onChange={e=>setPerSession(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
-      <label className="block text-sm">Mục tiêu điểm hằng ngày</label>
-      <input type="number" value={dailyTarget} onChange={e=>setDailyTarget(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
-      <div className="flex space-x-2">
-        <button onClick={save} className="px-3 py-2 bg-blue-500 text-white rounded">Lưu cài đặt</button>
-      </div>
-    </div>
-  );
-}
