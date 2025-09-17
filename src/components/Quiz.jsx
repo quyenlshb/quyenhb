@@ -12,7 +12,16 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [score, setScore] = useState(0); // Thêm biến trạng thái cho điểm số
+  const [score, setScore] = useState(0);
+
+  const playKana = () => {
+    if (pool.length > 0 && 'speechSynthesis' in window) {
+      const current = pool[index];
+      const utter = new SpeechSynthesisUtterance(current.kana);
+      utter.lang = 'ja-JP';
+      window.speechSynthesis.speak(utter);
+    }
+  };
 
   const generateQuiz = (setId) => {
     const activeSet = sets.find(s => s.id === setId);
@@ -68,6 +77,11 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       setTimer(settings.timer);
       setSelected(null);
       setShowNote(false);
+      
+      // Auto-play audio when a new question loads
+      if (isPlaying) {
+        playKana();
+      }
     } else if (isPlaying) {
       endQuiz();
     }
@@ -106,17 +120,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
     onFinish();
   };
 
-  const playKana = () => {
-    if (pool.length > 0 && 'speechSynthesis' in window) {
-      const current = pool[index];
-      const utter = new SpeechSynthesisUtterance(current.kana);
-      utter.lang = 'ja-JP';
-      window.speechSynthesis.speak(utter);
-    } else {
-      toast.error('Trình duyệt của bạn không hỗ trợ phát âm.');
-    }
-  };
-  
   const current = pool[index];
 
   if (!activeSetId) {
@@ -157,7 +160,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       </div>
       
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md text-center">
-        <h2 onClick={playKana} className="text-5xl font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer">{current.kanji}</h2>
+        <h2 className="text-5xl font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer">{current.kanji}</h2>
         <button onClick={playKana} className="mt-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 transition">
           <FaPlay className="inline-block mr-1" /> Nghe cách đọc
         </button>
@@ -184,8 +187,10 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
       {showNote && (
         <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg shadow-inner">
-          <div className="text-lg font-semibold">Đáp án:</div>
-          <div className="text-xl font-bold mt-1">{current.kana} - {current.meaning}</div>
+          <div className="text-lg font-semibold">
+              Đáp án đúng là:
+              <span className="font-bold"> {current.kanji} ({current.kana}) - {current.meaning}</span>
+          </div>
           <textarea
             defaultValue={current.note}
             onBlur={(e) => {
