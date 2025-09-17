@@ -151,8 +151,29 @@ export default function VocabManager({ user, db }) {
           kanji: parts[0],
           kana: parts[1],
           meaning: parts[2],
-          note: '', // Ghi chú bây giờ là trường rỗng mặc định
+          note: '',
           masteryLevel: 0,
           lastReviewedAt: null
         });
       }
+    });
+
+    if (items.length === 0) {
+      toast.error('Không tìm thấy từ vựng nào hợp lệ để import.');
+      return;
+    }
+
+    const updatedSets = sets.map(s => {
+      if (s.id === selected.id) {
+        return { ...s, items: [...s.items, ...items], updatedAt: Date.now() };
+      }
+      return s;
+    });
+
+    const userDocRef = doc(db, 'vocabData', user.uid);
+    try {
+      await updateDoc(userDocRef, { sets: updatedSets });
+      setPaste('');
+      setSelected({ ...selected, items: [...selected.items, ...items] });
+      toast.success(`Đã thêm ${items.length} từ vựng mới vào bộ từ.`);
+    } catch
