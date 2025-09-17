@@ -95,7 +95,7 @@ export default function App(){
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <Header
-        title="Học tiếng Nhật"
+        title="Trang học tiếng Nhật của Quyền" // Dòng này đã được thay đổi
         onOpenSettings={()=>setPage('settings')}
         user={user}
         onLogout={handleLogout}
@@ -113,13 +113,13 @@ export default function App(){
         </div>
       )}
       {!loading && (
-        <div className="p-4">
-          {!user && <div className="max-w-md mx-auto"><AuthForm auth={auth} /></div>}
+        <div className="p-4 transition-opacity duration-500 ease-in opacity-100">
+          {!user && <div className="max-w-md mx-auto transition-opacity duration-500 ease-in opacity-100"><AuthForm auth={auth} /></div>}
           {user && (
             <>
               {page === 'dashboard' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-r from-yellow-400 to-red-400 text-white rounded-xl p-4">
+                <div className="space-y-4 transition-opacity duration-500 ease-in opacity-100">
+                  <div className="bg-gradient-to-r from-yellow-400 to-red-400 text-white rounded-xl p-4 transition-transform duration-300 ease-in-out hover:scale-105">
                     <div className="text-xl">🔥 Streak: {streak} ngày</div>
                     <div className="mt-2">🎯 Mục tiêu: {settings.dailyTarget} điểm</div>
                     <div className="mt-2 bg-white/30 rounded-full h-3 overflow-hidden">
@@ -128,19 +128,19 @@ export default function App(){
                     <div className="mt-2 text-sm">{pointsToday}/{settings.dailyTarget} hôm nay</div>
                   </div>
 
-                  <div className="bg-white rounded-xl p-3 shadow">
+                  <div className="bg-white rounded-xl p-3 shadow transition-transform duration-300 ease-in-out hover:scale-105">
                     <div className="font-semibold mb-2">Các bộ từ</div>
                     {sets.map(s=>(
-                      <div key={s.id} className="flex items-center justify-between p-2 border-b">
+                      <div key={s.id} className="flex items-center justify-between p-2 border-b transition-transform duration-200 ease-in-out hover:bg-gray-50 hover:scale-[1.01]">
                         <div>{s.name}</div>
                         <div className="space-x-2">
-                          <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded" onMouseDown={()=>{ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
-                          <button onClick={()=> setPage('vocab')} className="px-3 py-1 bg-gray-200 rounded">Quản lý ✏️</button>
+                          <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded transition-transform duration-200 ease-in-out hover:bg-green-600 hover:scale-105" onMouseDown={()=>{ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
+                          <button onClick={()=> setPage('vocab')} className="px-3 py-1 bg-gray-200 rounded transition-transform duration-200 ease-in-out hover:bg-gray-300 hover:scale-105">Quản lý ✏️</button>
                         </div>
                       </div>
                     ))}
                     <div className="mt-3 text-center">
-                      <button onClick={()=> setPage('vocab')} className="px-4 py-2 bg-blue-500 text-white rounded">+ Thêm / Import bộ từ</button>
+                      <button onClick={()=> setPage('vocab')} className="px-4 py-2 bg-blue-500 text-white rounded transition-transform duration-200 ease-in-out hover:bg-blue-600 hover:scale-105">+ Thêm / Import bộ từ</button>
                     </div>
                   </div>
 
@@ -148,11 +148,11 @@ export default function App(){
                 </div>
               )}
 
-              {page === 'vocab' && <div className='max-w-xl mx-auto'><VocabManager db={db} user={user} /></div>}
+              {page === 'vocab' && <div className='max-w-xl mx-auto transition-opacity duration-500 ease-in opacity-100'><VocabManager db={db} user={user} /></div>}
 
-              {page === 'quiz' && <div className='max-w-xl mx-auto'><Quiz sets={sets} settings={settings} onFinish={finishSession} onUpdatePoints={updatePoints} /></div>}
+              {page === 'quiz' && <div className='max-w-xl mx-auto transition-opacity duration-500 ease-in opacity-100'><Quiz sets={sets} settings={settings} onFinish={finishSession} onUpdatePoints={updatePoints} /></div>}
 
-              {page === 'settings' && <div className='max-w-md mx-auto'><SettingsPanel settings={settings} setSettings={setSettings} /></div>}
+              {page === 'settings' && <div className='max-w-md mx-auto transition-opacity duration-500 ease-in opacity-100'><SettingsPanel settings={settings} setSettings={setSettings} /></div>}
             </>
           )}
         </div>
@@ -180,7 +180,7 @@ function SettingsPanel({ settings, setSettings }){
   };
 
   return (
-    <div className="p-4 bg-white rounded shadow">
+    <div className="p-4 bg-white rounded shadow transition-transform duration-300 ease-in-out hover:scale-105">
       <h3 className="font-semibold mb-3">Cài đặt</h3>
       <label className="block text-sm">Thời gian mỗi câu (giây)</label>
       <input type="number" value={timer} onChange={e=>setTimer(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
@@ -189,7 +189,7 @@ function SettingsPanel({ settings, setSettings }){
       <label className="block text-sm">Mục tiêu điểm hằng ngày</label>
       <input type="number" value={dailyTarget} onChange={e=>setDailyTarget(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
       <div className="flex space-x-2">
-        <button onClick={save} className="px-3 py-2 bg-blue-500 text-white rounded">Lưu cài đặt</button>
+        <button onClick={save} className="px-3 py-2 bg-blue-500 text-white rounded transition-transform duration-200 ease-in-out hover:bg-blue-600 hover:scale-105">Lưu cài đặt</button>
       </div>
     </div>
   );
