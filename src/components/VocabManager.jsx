@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { loadLocal, saveLocal } from '../utils/storage';
 import { collection, doc, setDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 
 export default function VocabManager({ db, user }){
   const [sets, setSets] = useState(() => loadLocal('vocabSets', []) );
@@ -23,71 +24,98 @@ export default function VocabManager({ db, user }){
         await setDoc(doc(collection(db, 'vocabSets'), id), ns);
       }catch(e){ console.log(e); }
     }
+    toast.success('Đã thêm bộ từ thành công!');
   };
 
   const importPaste = () => {
     const lines = paste.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    if(!selected) return alert('Chọn bộ trước');
+    if(!selected) {
+      toast.error('Vui lòng chọn bộ từ trước khi import.');
+      return;
+    }
     const items = [];
     for(const line of lines){
       const parts = line.split(/\s*\|\s*|\t+|\s{2,}/).map(p=>p.trim()).filter(Boolean);
-      if(parts.length<3){ alert('Dòng sai định dạng: '+line); return; }
-      items.push({ id: 'w'+Date.now()+Math.random(), kanji: parts[0], kana: parts[1], meaning: parts[2], note:'', updatedAt: Date.now()});
+      if(parts.length<3){ toast.error('Dòng sai định dạng: ' + line); continue; }
+      const [kanji, kana, meaning] = parts;
+      items.push({ id: 'w' + Date.now() + Math.random().toString(36).substring(2, 5), kanji, kana, meaning, note: '', updatedAt: Date.now() });
     }
-    setSets(prev => prev.map(s => s.id===selected.id ? {...s, items: [...s.items, ...items], updatedAt: Date.now() } : s));
+    setSets(prev => prev.map(s => s.id === selected.id ? { ...s, items: [...s.items, ...items], updatedAt: Date.now() } : s));
     setPaste('');
+    toast.success('Đã import từ thành công!');
   };
 
-  const saveNote = (setId, wordId, note) => {
-    setSets(prev => prev.map(s => s.id===setId ? {...s, items: s.items.map(w=> w.id===wordId ? {...w, note, updatedAt: Date.now()} : w)} : s));
+  const deleteSet = async (id) => {
+    if(!confirm('Bạn có chắc muốn xóa bộ từ này?')) return;
+    setSets(s => s.filter(x => x.id !== id));
+    if(selected && selected.id === id) setSelected(null);
+    if(navigator.onLine && user){
+      try{ await deleteDoc(doc(db, 'vocabSets', id)); }catch(e){ console.log(e); }
+    }
+    toast.info('Đã xóa bộ từ!');
+  };
+
+  const saveNote = (setId, itemId, note) => {
+    const setsLocal = loadLocal('vocabSets', []);
+    const setObj = setsLocal.find(s=>s.id===setId);
+    if(setObj){
+      setObj.items = setObj.items.map(it=> it.id===itemId ? {...it, note, updatedAt: Date.now()} : it);
+      saveLocal('vocabSets', setsLocal);
+      toast.success('Đã lưu ghi chú!');
+    }
+  };
+
+  const addWord = (kanji, kana, meaning) => {
+    if(!selected) {
+      toast.error('Vui lòng chọn bộ từ để thêm.');
+      return;
+    }
+    if(!kanji || !kana || !meaning) {
+      toast.error('Vui lòng điền đầy đủ thông tin.');
+      return;
+    }
+    const newItem = { id: 'w' + Date.now(), kanji, kana, meaning, note:'', updatedAt: Date.now()};
+    setSets(prev => prev.map(s => s.id === selected.id ? {...s, items: [...s.items, newItem], updatedAt: Date.now()} : s));
+    toast.success('Đã thêm từ mới!');
   };
 
   return (
-    <div className="p-4 space-y-3">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold">Quản lý bộ từ</h3>
-        <button onClick={addSet} className="px-3 py-1 bg-blue-500 text-white rounded">+ Thêm bộ</button>
+    <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md max-w-xl mx-auto">
+      <h2 className="text-xl font-bold mb-4">Quản lý từ vựng</h2>
+
+      <div className="flex space-x-2 mb-4">
+        <button onClick={addSet} className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition">
+          + Bộ mới
+        </button>
       </div>
 
-      <div className="space-y-2">
-        {sets.map(s=>(
-          <div key={s.id} className="p-2 bg-white rounded shadow flex justify-between items-center">
-            <div>{s.name}</div>
-            <div className="space-x-2">
-              <button className="px-2 py-1 bg-green-200" onClick={()=>setSelected(s)}>Mở</button>
-              <button className="px-2 py-1 bg-red-200" onClick={()=>setSets(prev=>prev.filter(x=>x.id!==s.id))}>Xóa</button>
-            </div>
-          </div>
-        ))}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Chọn bộ từ</label>
+        <select value={selected ? selected.id : ''} onChange={e=>setSelected(sets.find(s=>s.id===e.target.value))} className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+          <option value="">-- Chọn một bộ từ --</option>
+          {sets.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       {selected && (
-        <div className="bg-white p-3 rounded shadow">
-          <div className="font-semibold mb-2">Bộ: {selected.name}</div>
-          <div className="space-y-2">
+        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+          <h3 className="text-lg font-bold mb-2 flex justify-between items-center">
+            {selected.name}
+            <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selected.items.length} từ)</span>
+          </h3>
+          <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
             {selected.items.map(it=>(
-              <div key={it.id} className="flex justify-between items-center p-2 border rounded">
+              <div key={it.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
                 <div>
-                  <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500">{it.kana}</span></div>
-                  <div className="text-sm text-gray-600">{it.meaning}</div>
-                </div>
-                <div className="space-y-1 text-right">
-                  <button onClick={()=>{ const n = prompt('Ghi chú', it.note||''); if(n!==null) saveNote(selected.id, it.id, n); }} className="px-2 py-1 bg-yellow-200 rounded">Ghi chú</button>
+                  <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500 dark:text-gray-400">{it.kana}</span></div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">{it.meaning}</div>
                 </div>
               </div>
             ))}
           </div>
-
           <textarea value={paste} onChange={e=>setPaste(e.target.value)} className="w-full p-2 border rounded mt-3" rows={4} placeholder="Dán: Kanji | Kana | Nghĩa (mỗi dòng)"></textarea>
           <div className="flex space-x-2 mt-2">
             <button onClick={importPaste} className="px-3 py-1 bg-green-500 text-white rounded">Import</button>
-            <button onClick={()=>{ 
-              const k = prompt('Kanji'); if(!k) return;
-              const kana = prompt('Kana'); if(kana===null) return;
-              const mean = prompt('Nghĩa'); if(mean===null) return;
-              const item = { id: 'w'+Date.now(), kanji: k, kana, meaning: mean, note:'', updatedAt: Date.now()};
-              setSets(prev => prev.map(s=> s.id===selected.id ? {...s, items:[...s.items, item], updatedAt: Date.now()} : s));
-            }} className="px-3 py-1 bg-blue-500 text-white rounded">+ Thêm từ</button>
           </div>
         </div>
       )}

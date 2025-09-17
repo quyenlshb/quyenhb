@@ -8,6 +8,7 @@ import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { loadLocal, saveLocal } from './utils/storage';
+import { toast } from 'react-toastify';
 
 export default function App(){
   const handleBack = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
@@ -16,7 +17,6 @@ export default function App(){
   const [page, setPage] = useState('dashboard');
   const [sets, setSets] = useState(() => loadLocal('vocabSets', sampleSets));
   const [settings, setSettings] = useState(() => loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
-  // Sửa lỗi: Sử dụng loadLocal để tải điểm và streak một cách nhất quán
   const [pointsToday, setPointsToday] = useState(() => loadLocal('pointsToday', 0));
   const [totalPoints, setTotalPoints] = useState(() => loadLocal('totalPoints', 0));
   const [streak, setStreak] = useState(() => loadLocal('streak', 0));
@@ -28,7 +28,6 @@ export default function App(){
 
   useEffect(()=> saveLocal('settings', settings), [settings]);
 
-  // Sửa lỗi: Sử dụng saveLocal để lưu điểm và streak
   useEffect(()=> saveLocal('pointsToday', pointsToday), [pointsToday]);
   useEffect(()=> saveLocal('totalPoints', totalPoints), [totalPoints]);
   useEffect(()=> saveLocal('streak', streak), [streak]);
@@ -81,10 +80,9 @@ export default function App(){
     }
     const recKey = 'history_' + todayKey;
     localStorage.setItem(recKey, JSON.stringify({ points: pointsToday, date: todayKey }));
-    // Cập nhật và lưu pointsToday sau khi hoàn thành phiên
     setPointsToday(0);
     saveLocal('pointsToday', 0);
-    alert('Phiên học hoàn tất');
+    toast.info('Phiên học hoàn tất');
     setPage('dashboard');
   };
 
@@ -147,14 +145,13 @@ function SettingsPanel({ settings, setSettings }){
 
   const save = () => {
     if(dailyTarget < (settings.dailyTarget || 0)){
-      alert('Mục tiêu chỉ có thể tăng, không thể giảm');
+      toast.error('Mục tiêu chỉ có thể tăng, không thể giảm');
       return;
     }
     const ns = {...settings, timer, perSession, dailyTarget};
     setSettings(ns);
-    // Sửa lỗi: Sử dụng saveLocal
     saveLocal('settings', ns);
-    alert('Đã lưu cài đặt');
+    toast.success('Đã lưu cài đặt!');
   };
 
   return (
