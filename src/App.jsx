@@ -98,7 +98,6 @@ export default function App(){
           await setDoc(userDocRef, { sets: sets });
         }
         
-        // Listen for real-time updates
         const unsubFirestore = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             syncFromCloud(doc.data());

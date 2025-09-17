@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { doc, updateDoc } from 'firebase/firestore';
 import { FaPlay } from 'react-icons/fa';
+import { loadLocal, saveLocal } from './utils/storage'; // Đã sửa đường dẫn tại đây
 
 export default function Quiz({ sets, settings, onFinish, user, db }) {
   const [activeSetId, setActiveSetId] = useState(null);
@@ -77,7 +78,15 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
   };
   
   const updateWordMastery = async (wordId, newMasteryLevel) => {
-    if (!user) return;
+    if (!user) {
+        const setsLocal = loadLocal('vocabSets', []);
+        const setObj = setsLocal.find(s => s.id === activeSetId);
+        if (setObj) {
+            setObj.items = setObj.items.map(it => it.id === wordId ? { ...it, masteryLevel: newMasteryLevel, lastReviewedAt: Date.now() } : it);
+            saveLocal('vocabSets', setsLocal);
+        }
+        return;
+    }
     try {
       const userDocRef = doc(db, 'vocabData', user.uid);
       const updatedSets = sets.map(s => {
@@ -99,7 +108,16 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
   };
 
   const saveNote = async (newNote) => {
-    if (!user || !pool[index]) return;
+    if (!user) {
+        const setsLocal = loadLocal('vocabSets', []);
+        const setObj = setsLocal.find(s => s.id === activeSetId);
+        if (setObj) {
+            setObj.items = setObj.items.map(it => it.id === pool[index].id ? { ...it, note: newNote, updatedAt: Date.now() } : it);
+            saveLocal('vocabSets', setsLocal);
+            toast.success('Đã lưu ghi chú!');
+        }
+        return;
+    }
     try {
       const userDocRef = doc(db, 'vocabData', user.uid);
       const updatedSets = sets.map(s => {

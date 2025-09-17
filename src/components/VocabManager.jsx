@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { loadLocal, saveLocal } from './utils/storage';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { nanoid } from 'nanoid';
@@ -24,6 +25,8 @@ export default function VocabManager({ user, db }) {
         }
       });
       return () => unsub();
+    } else {
+        setSets(loadLocal('vocabSets', []));
     }
   }, [user, db, selected]);
 
@@ -146,10 +149,8 @@ export default function VocabManager({ user, db }) {
     lines.forEach(line => {
       const parts = line.split(/\s+/);
       if (parts.length >= 3) {
-        // Lấy kanji và kana từ hai phần tử đầu
         const kanji = parts[0];
         const kana = parts[1];
-        // Nối tất cả các phần tử còn lại để tạo thành nghĩa đầy đủ
         const meaning = parts.slice(2).join(' ');
 
         items.push({
