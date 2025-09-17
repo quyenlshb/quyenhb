@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { doc, updateDoc } from 'firebase/firestore';
+import { FaPlay } from 'react-icons/fa'; // Đảm bảo dòng này đã được import đúng
 
 export default function Quiz({ sets, settings, onFinish, user, db }) {
   const [activeSetId, setActiveSetId] = useState(null);
@@ -10,7 +11,6 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
   const [showNote, setShowNote] = useState(false);
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const playKana = () => {
@@ -59,6 +59,7 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
       
       const newMasteryLevel = (pool[index].masteryLevel || 0) + 1;
       updateWordMastery(pool[index].id, newMasteryLevel);
+      playKana(); // Play audio on correct answer
 
       setTimeout(() => {
         nextQuestion();
