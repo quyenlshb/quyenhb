@@ -95,7 +95,7 @@ export default function App(){
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <Header
-        title="Trang học tiếng Nhật của Quyền" // Dòng này đã được thay đổi
+        title="Trang học tiếng Nhật của Quyền"
         onOpenSettings={()=>setPage('settings')}
         user={user}
         onLogout={handleLogout}
@@ -119,7 +119,7 @@ export default function App(){
             <>
               {page === 'dashboard' && (
                 <div className="space-y-4 transition-opacity duration-500 ease-in opacity-100">
-                  <div className="bg-gradient-to-r from-yellow-400 to-red-400 text-white rounded-xl p-4 transition-transform duration-300 ease-in-out hover:scale-105">
+                  <div className="bg-gradient-to-r from-yellow-400 to-red-400 text-white rounded-xl p-4 transition-transform duration-300 ease-in-out">
                     <div className="text-xl">🔥 Streak: {streak} ngày</div>
                     <div className="mt-2">🎯 Mục tiêu: {settings.dailyTarget} điểm</div>
                     <div className="mt-2 bg-white/30 rounded-full h-3 overflow-hidden">
@@ -128,10 +128,10 @@ export default function App(){
                     <div className="mt-2 text-sm">{pointsToday}/{settings.dailyTarget} hôm nay</div>
                   </div>
 
-                  <div className="bg-white rounded-xl p-3 shadow transition-transform duration-300 ease-in-out hover:scale-105">
+                  <div className="bg-white rounded-xl p-3 shadow transition-transform duration-300 ease-in-out">
                     <div className="font-semibold mb-2">Các bộ từ</div>
                     {sets.map(s=>(
-                      <div key={s.id} className="flex items-center justify-between p-2 border-b transition-transform duration-200 ease-in-out hover:bg-gray-50 hover:scale-[1.01]">
+                      <div key={s.id} className="flex items-center justify-between p-2 border-b transition-transform duration-200 ease-in-out hover:bg-gray-50">
                         <div>{s.name}</div>
                         <div className="space-x-2">
                           <button onClick={()=> setPage('quiz')} className="px-3 py-1 bg-green-500 text-white rounded transition-transform duration-200 ease-in-out hover:bg-green-600 hover:scale-105" onMouseDown={()=>{ localStorage.setItem('activeSet', s.id); }}>Học ▶</button>
