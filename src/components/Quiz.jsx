@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { loadLocal, saveLocal } from '../utils/storage';
+import { toast } from 'react-toastify';
+import { FaPlay, FaPause } from 'react-icons/fa';
 
-export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
+export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
   const [activeSetId, setActiveSetId] = useState(null);
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
@@ -9,6 +11,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
   const [showNote, setShowNote] = useState(false);
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     setTimer(settings.timer);
@@ -16,38 +19,35 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
   useEffect(() => {
     let t;
-    if (pool.length && timer > 0 && !showNote && selected === null) {
-      t = setTimeout(() => setTimer(timer - 1), 1000);
+    if(pool.length && timer>0 && !showNote && selected === null){
+      t = setTimeout(()=> setTimer(timer-1), 1000);
     }
-    if (timer === 0 && pool.length && !showNote && selected === null) {
+    if(timer===0 && pool.length && !showNote && selected === null){
       setShowNote(true);
     }
-    return () => clearTimeout(t);
+    return ()=> clearTimeout(t);
   }, [timer, pool, showNote, selected]);
 
   useEffect(() => {
-    if (pool.length > 0) {
+    if(pool.length > 0) {
       const current = pool[index];
       const newOptions = [];
       newOptions.push(current.meaning);
-      while (newOptions.length < 4) {
+      while(newOptions.length < 4){
         const other = pool[Math.floor(Math.random() * pool.length)];
-        if (other && !newOptions.includes(other.meaning)) {
+        if(other && !newOptions.includes(other.meaning)) {
           newOptions.push(other.meaning);
         }
-        if (pool.length < 4) break;
+        if(pool.length <= 4) break;
       }
-      for (let i = newOptions.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
-      }
+      newOptions.sort(() => Math.random() - 0.5);
       setOptions(newOptions);
     }
   }, [index, pool]);
 
   const start = (setId) => {
-    const s = sets.find(x => x.id === setId);
-    if (!s) return alert('Bộ không tồn tại');
+    const s = sets.find(x=>x.id===setId);
+    if(!s) return toast.error('Bộ không tồn tại');
     const p = [...s.items].slice(0, settings.perSession);
     setActiveSetId(setId);
     setPool(p);
@@ -61,135 +61,129 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
   const playAudio = (text) => {
     try {
-      const ut = new SpeechSynthesisUtterance(text);
-      ut.lang = 'ja-JP';
-      speechSynthesis.cancel();
-      speechSynthesis.speak(ut);
-    } catch (e) { }
-  };
-
-  const choose = (meaning) => {
-    if (!current) return;
-    if (showNote) return;
-    setSelected(meaning);
-    if (meaning === current.meaning) {
-      onUpdatePoints(1);
-      playAudio(current.kana || current.kanji);
-      setTimeout(() => {
-        const ni = index + 1;
-        if (ni >= pool.length) { onFinish(); reset(); return; }
-        setIndex(ni); setTimer(settings.timer); setSelected(null);
-      }, 500);
-    } else {
-      setShowNote(true);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      speechSynthesis.speak(utterance);
+    } catch(e) {
+      console.log('Audio error:', e);
     }
   };
 
-  const reset = () => {
-    setActiveSetId(null); setPool([]); setIndex(0); setTimer(settings.timer); setShowNote(false); setSelected(null);
+  const choose = (choice) => {
+    if(selected) return;
+    const isCorrect = choice === current.meaning;
+    setSelected(choice);
+    if(isCorrect){
+      onUpdatePoints(1);
+      toast.success('Chính xác! +1 điểm', { autoClose: 1500 });
+      setTimeout(() => {
+        setIndex(i => i + 1);
+        setTimer(settings.timer);
+        setSelected(null);
+      }, 1500);
+    } else {
+      setShowNote(true);
+      toast.error('Chưa chính xác.', { autoClose: 1500 });
+    }
   };
 
   const nextAfterWrong = () => {
-    const ni = index + 1;
-    if (ni >= pool.length) { onFinish(); reset(); return; }
-    setIndex(ni); setTimer(settings.timer); setShowNote(false); setSelected(null);
+    setIndex(i => i + 1);
+    setTimer(settings.timer);
+    setShowNote(false);
+    setSelected(null);
   };
 
-  if (!activeSetId) {
+  if(!activeSetId || !pool.length) {
     return (
-      <div className="p-6 bg-slate-100 min-h-screen">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Chọn bộ từ vựng để học</h2>
-        <div className="space-y-4">
-          {sets.map(s => (
-            <div key={s.id} className="flex justify-between items-center p-4 bg-white rounded-2xl shadow-md">
-              <div className="text-lg text-gray-800 font-medium">{s.name}</div>
-              <button onClick={() => start(s.id)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl shadow-sm hover:bg-indigo-700 transition">
-                Học <span className="ml-1">▶</span>
-              </button>
-            </div>
-          ))}
+      <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md max-w-xl mx-auto">
+        <h2 className="text-xl font-bold mb-4">Luyện tập từ vựng</h2>
+        <div className="text-center text-gray-500">
+          Vui lòng chọn một bộ từ từ trang chủ.
         </div>
       </div>
     );
   }
 
-  const getOptionClasses = (meaning) => {
-    if (selected === null) {
-      return "bg-indigo-50 hover:bg-indigo-100";
-    }
-    if (meaning === current.meaning) {
-      return "bg-emerald-500 text-white";
-    }
-    if (selected === meaning) {
-      return "bg-rose-500 text-white";
-    }
-    return "bg-white";
-  };
+  if(index >= pool.length) {
+    return (
+      <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md max-w-xl mx-auto">
+        <h2 className="text-xl font-bold mb-4">Hoàn thành!</h2>
+        <p className="text-center text-gray-500">Bạn đã hoàn thành phiên học này.</p>
+        <button onClick={onFinish} className="mt-4 w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-transform duration-200 ease-in-out hover:scale-105">
+          Kết thúc phiên
+        </button>
+      </div>
+    );
+  }
+
+  const progress = (index / pool.length) * 100;
 
   return (
-    <div className="p-6 bg-slate-100 min-h-screen font-sans">
-      <div className="flex justify-between items-center text-gray-600 mb-4">
-        <div className="flex items-center space-x-1">
-          <span className="text-xl">⏱</span>
-          <span className="font-semibold">{timer}s</span>
+    <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md max-w-xl mx-auto">
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-sm">Câu hỏi {index + 1}/{pool.length}</span>
+        <div className="relative w-32 h-2 bg-gray-200 rounded-full">
+          <div className="absolute h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
         </div>
-        <div className="font-semibold text-lg">#{index + 1}/{pool.length}</div>
+        <div className="flex items-center space-x-1">
+          <div className="text-lg font-bold w-8 text-right">{timer}</div>
+          <button onClick={() => playAudio(current.kana)} className="p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-transform duration-200 ease-in-out hover:scale-110">
+            <FaPlay />
+          </button>
+        </div>
       </div>
-      {current ? (
-        <>
-          <div className="bg-white p-6 rounded-2xl shadow-xl text-center mb-6">
-            <div className="text-4xl font-bold text-gray-800 mb-2">{current.kanji}</div>
-            {showNote && <div className="mt-2 text-md text-gray-600 font-medium">{current.kana} — {current.meaning}</div>}
+
+      <div className="text-3xl font-bold text-center mb-6">
+        {current.kanji}
+      </div>
+
+      <div className="space-y-3">
+        {options.map((o,i)=>(
+          <button
+            key={i}
+            onClick={()=>choose(o)}
+            disabled={selected !== null}
+            className={`
+              w-full p-4 rounded-xl shadow text-left text-base transition-colors duration-200
+              ${selected === null ? 'bg-blue-100 hover:bg-blue-200' : ''}
+              ${selected !== null && o !== selected ? 'opacity-50' : ''}
+              ${selected === o && o === current.meaning ? 'bg-green-400' : ''}
+              ${selected === o && o !== current.meaning ? 'bg-red-400' : ''}
+              ${selected === o && o === current.meaning ? 'hover:bg-green-400' : ''}
+              ${selected === o && o !== current.meaning ? 'hover:bg-red-400' : ''}
+              
+            `}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
+
+      {showNote && (
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg shadow-inner">
+          <div className="text-lg font-semibold">Đáp án:</div>
+          <div className="text-xl font-bold mt-1">{current.kana} - {current.meaning}</div>
+          <textarea
+            defaultValue={current.note}
+            onBlur={(e)=>{
+              // save note locally
+              const setsLocal = loadLocal('vocabSets', []);
+              const setObj = setsLocal.find(s=>s.id===activeSetId);
+              if(setObj){
+                setObj.items = setObj.items.map(it=> it.id===current.id ? {...it, note: e.target.value, updatedAt: Date.now()} : it);
+                saveLocal('vocabSets', setsLocal);
+                toast.success('Đã lưu ghi chú!');
+              }
+            }}
+            className="w-full p-3 border border-gray-300 rounded-lg mt-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Thêm ghi chú cá nhân..."
+          ></textarea>
+          <div className="flex justify-end mt-2">
+            <button onClick={nextAfterWrong} className="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-transform duration-200 ease-in-out hover:scale-105">
+              Tiếp theo
+            </button>
           </div>
-
-          <div className="space-y-3 mb-6">
-            {options.map((o, i) => (
-              <button
-                key={i}
-                onClick={() => choose(o)}
-                disabled={selected !== null}
-                className={`w-full p-4 rounded-xl shadow-md text-left text-base transition-colors duration-200 ${getOptionClasses(o)}`}
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-
-          {showNote && (
-            <div className="bg-white p-4 rounded-xl shadow-md space-y-3">
-              <div className="text-gray-600 font-medium">Ghi chú từ này</div>
-              <textarea
-                defaultValue={current.note}
-                onBlur={(e) => {
-                  const setsLocal = loadLocal('vocabSets', []);
-                  const setObj = setsLocal.find(s => s.id === activeSetId);
-                  if (setObj) {
-                    setObj.items = setObj.items.map(it => it.id === current.id ? { ...it, note: e.target.value, updatedAt: Date.now() } : it);
-                    saveLocal('vocabSets', setsLocal);
-                  }
-                }}
-                className="w-full p-3 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Thêm ghi chú cá nhân..."
-              ></textarea>
-              <div className="flex justify-end">
-                <button onClick={nextAfterWrong} className="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition">
-                  Tiếp theo
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!showNote && (
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setShowNote(true)} className="px-5 py-2 bg-yellow-400 text-gray-800 rounded-lg shadow hover:bg-yellow-500 transition">
-                Chưa biết
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="p-6 text-center text-gray-500">
-          Không có từ. Vui lòng thêm từ mới.
         </div>
       )}
     </div>
