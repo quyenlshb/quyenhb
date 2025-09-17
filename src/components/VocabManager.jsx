@@ -43,7 +43,7 @@ export default function VocabManager({ db, user }) {
           meaning: parts[2] || '',
           note: parts[3] || '',
           createdAt: Date.now(),
-          masteryLevel: 0 // Gán mức độ thành thạo ban đầu là 0
+          masteryLevel: 0
         });
       }
     }
@@ -66,6 +66,9 @@ export default function VocabManager({ db, user }) {
     }
   };
 
+  // Sắp xếp các từ trong bộ từ được chọn theo masteryLevel từ thấp đến cao
+  const sortedItems = selected ? [...selected.items].sort((a, b) => a.masteryLevel - b.masteryLevel) : [];
+
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold mb-4">Quản lý Từ vựng</h2>
@@ -85,11 +88,14 @@ export default function VocabManager({ db, user }) {
             <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selected.items.length} từ)</span>
           </h3>
           <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
-            {selected.items.map(it => (
+            {sortedItems.map(it => (
               <div key={it.id} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
                 <div>
                   <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500 dark:text-gray-400">{it.kana}</span></div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">{it.meaning}</div>
+                </div>
+                <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                  ML: {it.masteryLevel}
                 </div>
               </div>
             ))}
