@@ -29,9 +29,17 @@ export default function App(){
 
   useEffect(()=> saveLocal('settings', settings), [settings]);
 
-  useEffect(()=> saveLocal('pointsToday', pointsToday), [pointsToday]);
-  useEffect(()=> saveLocal('totalPoints', totalPoints), [totalPoints]);
-  useEffect(()=> saveLocal('streak', streak), [streak]);
+  useEffect(()=>{
+    saveLocal('pointsToday', pointsToday);
+  },[pointsToday]);
+
+  useEffect(()=>{
+    saveLocal('totalPoints', totalPoints);
+  },[totalPoints]);
+
+  useEffect(()=>{
+    saveLocal('streak', streak);
+  },[streak]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {

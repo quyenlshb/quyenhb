@@ -14,6 +14,13 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
+    const activeSetId = localStorage.getItem('activeSet');
+    if (activeSetId) {
+      start(activeSetId);
+    }
+  }, []);
+
+  useEffect(() => {
     setTimer(settings.timer);
   }, [settings]);
 
@@ -74,7 +81,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
     const isCorrect = choice === current.meaning;
     setSelected(choice);
     if(isCorrect){
-      onUpdatePoints(1);
+      onUpdatePoints(1); // Dòng này gửi điểm lên App.jsx
       toast.success('Chính xác! +1 điểm', { autoClose: 1500 });
       setTimeout(() => {
         setIndex(i => i + 1);
@@ -152,7 +159,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
               ${selected === o && o !== current.meaning ? 'bg-red-400' : ''}
               ${selected === o && o === current.meaning ? 'hover:bg-green-400' : ''}
               ${selected === o && o !== current.meaning ? 'hover:bg-red-400' : ''}
-              
             `}
           >
             {o}
