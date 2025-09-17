@@ -85,10 +85,22 @@ export default function App(){
     toast.info('Phiên học hoàn tất');
     setPage('dashboard');
   };
+  
+  const showBackButton = page !== 'dashboard' && page !== 'auth';
+  const showHomeButton = page !== 'dashboard' && page !== 'auth';
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <Header title="Học tiếng Nhật" onOpenSettings={()=>setPage('settings')} user={user} onLogout={handleLogout} onBack={handleBack} onHome={handleHome} />
+      <Header
+        title="Học tiếng Nhật"
+        onOpenSettings={()=>setPage('settings')}
+        user={user}
+        onLogout={handleLogout}
+        onBack={handleBack}
+        onHome={handleHome}
+        showBackButton={showBackButton}
+        showHomeButton={showHomeButton}
+      />
       <div className="p-4">
         {!user && <div className="max-w-md mx-auto"><AuthForm auth={auth} /></div>}
         {user && (

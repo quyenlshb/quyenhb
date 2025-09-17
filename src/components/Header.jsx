@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaArrowLeft, FaHome, FaCog, FaUserCircle, FaSignOutAlt } from 'react-icons/fa'; // Import các icon từ Font Awesome
+import { FaArrowLeft, FaHome, FaCog, FaUserCircle, FaSignOutAlt } from 'react-icons/fa';
 
 export default function Header({ title, onOpenSettings, user, onLogout, onBack, onHome, showBackButton, showHomeButton }) {
   return (
@@ -7,12 +7,12 @@ export default function Header({ title, onOpenSettings, user, onLogout, onBack, 
       <div className="flex items-center space-x-3">
         {showBackButton && (
           <button onClick={onBack} className="text-xl p-2 hover:bg-indigo-700 rounded-full transition">
-            <FaArrowLeft /> {/* Icon mũi tên quay lại */}
+            <FaArrowLeft />
           </button>
         )}
         {showHomeButton && (
           <button onClick={onHome} className="text-xl p-2 hover:bg-indigo-700 rounded-full transition">
-            <FaHome /> {/* Icon ngôi nhà */}
+            <FaHome />
           </button>
         )}
         {!showBackButton && !showHomeButton && (
@@ -24,14 +24,14 @@ export default function Header({ title, onOpenSettings, user, onLogout, onBack, 
         {user && (
           <>
             <div className="flex items-center space-x-2">
-              <FaUserCircle className="text-2xl" /> {/* Icon người dùng */}
+              <FaUserCircle className="text-2xl" />
               <span className="hidden sm:inline text-lg">{user.displayName || user.email}</span>
             </div>
             <button onClick={onOpenSettings} className="text-xl p-2 hover:bg-indigo-700 rounded-full transition">
-              <FaCog /> {/* Icon cài đặt */}
+              <FaCog />
             </button>
             <button onClick={onLogout} className="text-xl p-2 hover:bg-indigo-700 rounded-full transition">
-              <FaSignOutAlt /> {/* Icon đăng xuất */}
+              <FaSignOutAlt />
             </button>
           </>
         )}
