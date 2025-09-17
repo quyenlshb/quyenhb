@@ -19,25 +19,22 @@ export default function VocabManager({ user, db }) {
         if (docSnap.exists()) {
           const fetchedSets = docSnap.data().sets || [];
           setSets(fetchedSets);
+          if (selected) {
+            // Cập nhật 'selected' mà không gây vòng lặp vô hạn
+            const newSelected = fetchedSets.find(s => s.id === selected.id);
+            if (newSelected) {
+              setSelected(newSelected);
+            } else {
+              setSelected(null);
+            }
+          }
         }
       });
       return () => unsub();
     } else {
-        setSets(loadLocal('vocabSets', []));
+      setSets(loadLocal('vocabSets', []));
     }
-  }, [user, db]); // Đã loại bỏ 'selected' khỏi mảng phụ thuộc và bỏ logic gây lỗi
-
-  // Logic cập nhật selected khi sets thay đổi
-  useEffect(() => {
-    if (selected && sets.length > 0) {
-      const updatedSelected = sets.find(s => s.id === selected.id);
-      if (updatedSelected) {
-        setSelected(updatedSelected);
-      } else {
-        setSelected(null);
-      }
-    }
-  }, [sets, selected]);
+  }, [user, db]);
 
   const addSet = async () => {
     if (!user) {
@@ -119,8 +116,8 @@ export default function VocabManager({ user, db }) {
         setSelected(updatedSets.find(s => s.id === selected.id));
         toast.success('Đã xóa từ thành công!');
       } catch (e) {
-      console.error('Lỗi khi xóa từ:', e);
-      toast.error('Đã xảy ra lỗi!');
+        console.error('Lỗi khi xóa từ:', e);
+        toast.error('Đã xảy ra lỗi!');
       }
     }
   };
