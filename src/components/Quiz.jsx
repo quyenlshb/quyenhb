@@ -93,7 +93,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
             if (option === current.meaning) {
               return { ...item, masteryLevel: Math.min(5, item.masteryLevel + 1) };
             } else {
-              return { ...item, masteryLevel: Math.max(0, item.masteryLevel - 1) };
+              return { ...item, masteryLevel: 0 }; // Đặt lại về 0 khi sai
             }
           }
           return item;
@@ -124,7 +124,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       if (s.id === activeSetId) {
         const updatedItems = s.items.map(item => {
           if (item.id === current.id) {
-            return { ...item, masteryLevel: Math.max(0, item.masteryLevel - 1) };
+            return { ...item, masteryLevel: 0 }; // Đặt lại về 0 khi hết giờ
           }
           return item;
         });
