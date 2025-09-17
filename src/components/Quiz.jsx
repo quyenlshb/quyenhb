@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { loadLocal, saveLocal } from '../utils/storage';
 import { toast } from 'react-toastify';
-import { FaPlay, FaPause, FaRedo, FaArrowLeft } from 'react-icons/fa';
+import { FaPlay, FaArrowLeft } from 'react-icons/fa';
 
 export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
   const [activeSetId, setActiveSetId] = useState(null);
@@ -30,9 +30,12 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       return;
     }
 
-    const shuffled = activeSet.items.sort(() => 0.5 - Math.random());
-    const newPool = shuffled.slice(0, settings.perSession);
+    // Sắp xếp các từ theo mức độ thành thạo (từ thấp đến cao)
+    const sortedWords = activeSet.items.sort((a, b) => a.masteryLevel - b.masteryLevel);
     
+    // Lấy một số lượng từ nhất định cho phiên luyện tập
+    const newPool = sortedWords.slice(0, settings.perSession);
+
     setActiveSetId(setId);
     setPool(newPool);
     setIndex(0);
@@ -82,6 +85,28 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
   const checkAnswer = (option) => {
     setSelected(option);
     const current = pool[index];
+
+    const updatedSets = sets.map(s => {
+      if (s.id === activeSetId) {
+        const updatedItems = s.items.map(item => {
+          if (item.id === current.id) {
+            if (option === current.meaning) {
+              return { ...item, masteryLevel: Math.min(5, item.masteryLevel + 1) };
+            } else {
+              return { ...item, masteryLevel: Math.max(0, item.masteryLevel - 1) };
+            }
+          }
+          return item;
+        });
+        return { ...s, items: updatedItems };
+      }
+      return s;
+    });
+
+    onUpdatePoints(1); // Cập nhật điểm cho bài luyện tập
+    
+    saveLocal('vocabSets', updatedSets); // Lưu lại ngay lập tức
+    
     if (option === current.meaning) {
       setScore(s => s + 1);
       toast.success('Chính xác! (+1 điểm)');
@@ -94,6 +119,20 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
   const handleWrongAnswer = () => {
     setSelected('wrong');
+    const current = pool[index];
+    const updatedSets = sets.map(s => {
+      if (s.id === activeSetId) {
+        const updatedItems = s.items.map(item => {
+          if (item.id === current.id) {
+            return { ...item, masteryLevel: Math.max(0, item.masteryLevel - 1) };
+          }
+          return item;
+        });
+        return { ...s, items: updatedItems };
+      }
+      return s;
+    });
+    saveLocal('vocabSets', updatedSets);
     setShowNote(true);
   };
 
@@ -107,14 +146,12 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
   const endQuiz = () => {
     setIsPlaying(false);
-    onUpdatePoints(score);
     toast.success(`Đã hoàn thành bài luyện tập. Bạn đạt được ${score} điểm!`);
     onFinish();
   };
 
   const current = pool[index];
 
-  // Kiểm tra nếu chưa có bộ từ nào được chọn, hiển thị màn hình chọn bộ từ
   if (!activeSetId) {
     return (
       <div className="p-4 space-y-4">
@@ -132,7 +169,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
     );
   }
 
-  // Hiển thị giao diện bài quiz khi đã có bộ từ
   if (pool.length === 0 || index >= pool.length) {
     return (
       <div className="p-4 text-center space-y-4">
