@@ -7,7 +7,7 @@ import { sampleSets } from './data/wordSets';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { loadLocal, saveLocal } from './utils/storage';
+import { loadLocal, saveLocal, getLocalMeta } from './utils/storage';
 import { toast } from 'react-toastify';
 
 export default function App(){
@@ -23,7 +23,7 @@ export default function App(){
   const [streak, setStreak] = useState(() => loadLocal('streak', 0));
   const [lastSync, setLastSync] = useState(() => loadLocal('lastSync', null));
   
-  // Sửa lỗi ở đây: Cập nhật điểm một cách an toàn
+  // Sửa lỗi ở đây: Cập nhật điểm một cách an toàn và đúng
   const handleUpdatePoints = (points) => {
     setPointsToday(prevPoints => {
       const newPoints = prevPoints + points;
@@ -45,16 +45,21 @@ export default function App(){
           const docRef = doc(db, 'vocabData', currentUser.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            const serverSets = docSnap.data().sets;
-            const localMeta = getLocalMeta('vocabSets');
-            if (serverSets && (!localMeta || new Date(serverSets.updatedAt) > new Date(localMeta.updatedAt))) {
-              setSets(serverSets);
-              toast.info('Đã đồng bộ dữ liệu từ server.');
-            } else {
-              setDoc(docRef, { sets }, { merge: true });
+            const serverData = docSnap.data();
+            if (serverData.sets) {
+              const localMeta = getLocalMeta('vocabSets');
+              const serverUpdatedAt = serverData.sets.updatedAt;
+              const localUpdatedAt = localMeta ? localMeta.updatedAt : 0;
+              
+              if (serverUpdatedAt > localUpdatedAt) {
+                setSets(serverData.sets);
+                toast.info('Đã đồng bộ dữ liệu từ cloud.');
+              } else {
+                setDoc(docRef, { sets: { data: sets, updatedAt: Date.now() } }, { merge: true });
+              }
             }
           } else {
-            setDoc(docRef, { sets });
+            setDoc(docRef, { sets: { data: sets, updatedAt: Date.now() } });
           }
         } catch (e) { console.error('Lỗi khi đồng bộ:', e); }
       }
@@ -69,13 +74,12 @@ export default function App(){
     const last = loadLocal('lastLogin', null);
     if(last !== today) {
       if(last) {
-        // Kiểm tra xem có phải ngày hôm qua không
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         if(new Date(last).toDateString() === yesterday.toDateString()){
-            setStreak(s => s + 1); // Tiếp tục streak
+            setStreak(s => s + 1);
         } else {
-            setStreak(0); // Mất streak nếu không vào ngày hôm qua
+            setStreak(0);
         }
       }
       setPointsToday(0);
@@ -95,15 +99,6 @@ export default function App(){
     }
   };
 
-  const handleOpenSettings = () => {
-    setPage('settings');
-  };
-
-  const handleSaveSettings = (newSettings) => {
-    setSettings(newSettings);
-    setPage('dashboard');
-  };
-
   const syncToCloud = async () => {
     if (!user) {
       toast.error('Bạn cần đăng nhập để đồng bộ.');
@@ -112,14 +107,46 @@ export default function App(){
     setLastSync(Date.now());
     saveLocal('lastSync', Date.now());
     try {
-      await setDoc(doc(db, 'vocabData', user.uid), { sets }, { merge: true });
+      await setDoc(doc(db, 'vocabData', user.uid), { sets: { data: sets, updatedAt: Date.now() } }, { merge: true });
       toast.success('Đã đồng bộ dữ liệu lên cloud thành công!');
     } catch (e) {
       toast.error('Lỗi khi đồng bộ dữ liệu.');
     }
   };
+  
+  // Dữ liệu cài đặt được quản lý trực tiếp trong component App
+  const [timer, setTimer] = useState(settings.timer);
+  const [perSession, setPerSession] = useState(settings.perSession);
+  const [dailyTarget, setDailyTarget] = useState(settings.dailyTarget);
 
+  const handleSaveSettings = () => {
+    if(dailyTarget < (settings.dailyTarget || 0)) {
+        toast.error('Mục tiêu chỉ có thể tăng, không thể giảm');
+        return;
+    }
+    const newSettings = {...settings, timer, perSession, dailyTarget};
+    setSettings(newSettings);
+    saveLocal('settings', newSettings);
+    toast.success('Đã lưu cài đặt!');
+    setPage('dashboard');
+  };
+  
   const renderPage = () => {
+    if (page === 'settings') {
+      return (
+        <div className="p-4 bg-white dark:bg-gray-800 rounded shadow">
+          <h3 className="font-semibold mb-3">Cài đặt</h3>
+          <label className="block text-sm">Thời gian mỗi câu (giây)</label>
+          <input type="number" value={timer} onChange={e=>setTimer(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2 dark:bg-gray-700 dark:border-gray-600" />
+          <label className="block text-sm">Số từ mỗi lần</label>
+          <input type="number" value={perSession} onChange={e=>setPerSession(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2 dark:bg-gray-700 dark:border-gray-600" />
+          <label className="block text-sm">Mục tiêu điểm hằng ngày</label>
+          <input type="number" value={dailyTarget} onChange={e=>setDailyTarget(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2 dark:bg-gray-700 dark:border-gray-600" />
+          <button onClick={handleSaveSettings} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">Lưu Cài đặt</button>
+        </div>
+      );
+    }
+    
     switch(page){
       case 'dashboard':
         return (
@@ -157,8 +184,6 @@ export default function App(){
         return <Quiz sets={sets} settings={settings} onFinish={()=>setPage('dashboard')} onUpdatePoints={handleUpdatePoints} />;
       case 'vocabManager':
         return <VocabManager sets={sets} setSets={setSets} db={db} user={user} />;
-      case 'settings':
-        return <SettingsPage settings={settings} onSave={handleSaveSettings} onBack={()=>setPage('dashboard')} />;
       default:
         return null;
     }
@@ -168,7 +193,7 @@ export default function App(){
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col items-center">
       <Header 
         title="Luyện từ vựng" 
-        onOpenSettings={handleOpenSettings} 
+        onOpenSettings={()=>setPage('settings')} 
         user={user} 
         onLogout={handleLogout} 
         showBackButton={page !== 'dashboard'} 
