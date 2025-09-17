@@ -30,10 +30,8 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       return;
     }
 
-    // Sắp xếp các từ theo mức độ thành thạo (từ thấp đến cao)
     const sortedWords = activeSet.items.sort((a, b) => a.masteryLevel - b.masteryLevel);
     
-    // Lấy một số lượng từ nhất định cho phiên luyện tập
     const newPool = sortedWords.slice(0, settings.perSession);
 
     setActiveSetId(setId);
@@ -86,35 +84,45 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
     setSelected(option);
     const current = pool[index];
 
-    const updatedSets = sets.map(s => {
-      if (s.id === activeSetId) {
-        const updatedItems = s.items.map(item => {
-          if (item.id === current.id) {
-            if (option === current.meaning) {
-              return { ...item, masteryLevel: Math.min(5, item.masteryLevel + 1) };
-            } else {
-              return { ...item, masteryLevel: 0 }; // Đặt lại về 0 khi sai
-            }
-          }
-          return item;
-        });
-        return { ...s, items: updatedItems };
-      }
-      return s;
-    });
-
-    onUpdatePoints(1); // Cập nhật điểm cho bài luyện tập
-    
-    saveLocal('vocabSets', updatedSets); // Lưu lại ngay lập tức
-    
+    let updatedSets = sets;
     if (option === current.meaning) {
-      setScore(s => s + 1);
+      // Logic cho câu trả lời đúng
+      updatedSets = sets.map(s => {
+        if (s.id === activeSetId) {
+          const updatedItems = s.items.map(item => {
+            if (item.id === current.id) {
+              return { ...item, masteryLevel: Math.min(5, item.masteryLevel + 1) };
+            }
+            return item;
+          });
+          return { ...s, items: updatedItems };
+        }
+        return s;
+      });
+
+      onUpdatePoints(1); // Cập nhật điểm CHỈ khi trả lời đúng
+      setScore(s => s + 1); // Cập nhật điểm cho phiên hiện tại
       toast.success('Chính xác! (+1 điểm)');
       setTimeout(nextQuestion, 1000);
     } else {
+      // Logic cho câu trả lời sai
+      updatedSets = sets.map(s => {
+        if (s.id === activeSetId) {
+          const updatedItems = s.items.map(item => {
+            if (item.id === current.id) {
+              return { ...item, masteryLevel: 0 }; // Đặt lại về 0 khi sai
+            }
+            return item;
+          });
+          return { ...s, items: updatedItems };
+        }
+        return s;
+      });
       toast.error('Sai rồi.');
       setShowNote(true);
     }
+    
+    saveLocal('vocabSets', updatedSets);
   };
 
   const handleWrongAnswer = () => {
