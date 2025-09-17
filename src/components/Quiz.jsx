@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { doc, updateDoc } from 'firebase/firestore';
-import { FaPlay } from 'react-icons/fa'; // Đảm bảo dòng này đã được import đúng
+import { FaPlay } from 'react-icons/fa';
 
 export default function Quiz({ sets, settings, onFinish, user, db }) {
   const [activeSetId, setActiveSetId] = useState(null);
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
   const [timer, setTimer] = useState(settings.timer);
-  const [showNote, setShowNote] = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [showResult, setShowResult] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [options, setOptions] = useState([]);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
@@ -35,10 +35,11 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
     setActiveSetId(setId);
     setIndex(0);
     setCorrectAnswers(0);
-    setShowNote(false);
-    setSelected(null);
+    setShowResult(false);
+    setSelectedAnswer(null);
     if (quizPool.length > 0) {
       generateOptions(quizPool[0]);
+      setTimer(settings.timer);
     }
   };
 
@@ -52,26 +53,27 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
   };
 
   const handleAnswer = (answer) => {
-    setSelected(answer);
+    setSelectedAnswer(answer);
     if (answer === pool[index].meaning) {
       setCorrectAnswers(correctAnswers + 1);
-      setShowNote(false);
-      
       const newMasteryLevel = (pool[index].masteryLevel || 0) + 1;
       updateWordMastery(pool[index].id, newMasteryLevel);
-      playKana(); // Play audio on correct answer
-
+      playKana();
+      setShowResult(true);
       setTimeout(() => {
         nextQuestion();
-      }, 500);
+      }, 1000);
     } else {
-      setShowNote(true);
+      setShowResult(true);
       const newMasteryLevel = Math.max(0, (pool[index].masteryLevel || 0) - 1);
       updateWordMastery(pool[index].id, newMasteryLevel);
     }
-    
-    // Stop timer
-    setTimer(settings.timer);
+  };
+  
+  const handleTimeout = () => {
+    setShowResult(true);
+    const newMasteryLevel = Math.max(0, (pool[index].masteryLevel || 0) - 1);
+    updateWordMastery(pool[index].id, newMasteryLevel);
   };
   
   const updateWordMastery = async (wordId, newMasteryLevel) => {
@@ -97,7 +99,7 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
   };
 
   const saveNote = async (newNote) => {
-    if (!user || !selected) return;
+    if (!user || !pool[index]) return;
     try {
       const userDocRef = doc(db, 'vocabData', user.uid);
       const updatedSets = sets.map(s => {
@@ -120,8 +122,8 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
   };
 
   const nextQuestion = () => {
-    setSelected(null);
-    setShowNote(false);
+    setSelectedAnswer(null);
+    setShowResult(false);
     if (index + 1 < pool.length) {
       setIndex(index + 1);
       generateOptions(pool[index + 1]);
@@ -130,17 +132,23 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
       onFinish(correctAnswers);
     }
   };
+  
+  const showInfo = () => {
+    setShowResult(true);
+    setSelectedAnswer(null);
+    setTimer(0);
+  };
 
   useEffect(() => {
-    if (pool.length > 0 && timer > 0 && selected === null) {
+    if (pool.length > 0 && timer > 0 && !showResult) {
       const countdown = setInterval(() => {
         setTimer(t => t - 1);
       }, 1000);
       return () => clearInterval(countdown);
-    } else if (timer === 0 && selected === null) {
-      handleAnswer(''); // Simulate wrong answer on timeout
+    } else if (timer === 0 && !showResult) {
+      handleTimeout();
     }
-  }, [pool, timer, selected]);
+  }, [pool, timer, showResult]);
 
   if (sets.length === 0) {
     return (
@@ -175,7 +183,7 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
       </div>
       <div className="text-center mb-4">
         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Câu {index + 1} / {pool.length}</span>
-        <span className="ml-4 text-sm font-medium text-red-500">Time: {timer}s</span>
+        <span className="ml-4 text-sm font-medium text-red-500">Thời gian: {timer}s</span>
       </div>
       <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-md text-center">
         <h3 className="text-4xl font-bold mb-4">
@@ -185,21 +193,26 @@ export default function Quiz({ sets, settings, onFinish, user, db }) {
             <FaPlay />
         </button>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        {options.map(o => (
+      
+      {!showResult ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          {options.map(o => (
+            <button
+              key={o}
+              onClick={() => handleAnswer(o)}
+              className="p-4 rounded-lg font-semibold text-lg transition bg-blue-500 text-white hover:bg-blue-600"
+            >
+              {o}
+            </button>
+          ))}
           <button
-            key={o}
-            onClick={() => handleAnswer(o)}
-            className={`p-4 rounded-lg font-semibold text-lg transition ${selected ? (o === current.meaning ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700 dark:bg-gray-600 dark:text-gray-300') : 'bg-blue-500 text-white hover:bg-blue-600'} `}
-            disabled={selected !== null}
+            onClick={showInfo}
+            className="md:col-span-2 p-4 rounded-lg font-semibold text-lg transition bg-gray-500 text-white hover:bg-gray-600"
           >
-            {o}
+            Chưa biết
           </button>
-        ))}
-      </div>
-
-      {showNote && (
+        </div>
+      ) : (
         <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg shadow-inner">
           <div className="text-lg font-semibold">
               Đáp án đúng là:
