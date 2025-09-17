@@ -6,186 +6,137 @@ import Quiz from './components/Quiz';
 import { sampleSets } from './data/wordSets';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { loadLocal, saveLocal, getLocalMeta } from './utils/storage';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 
-export default function App(){
-  const handleBack = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
+export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState('dashboard');
-  const [sets, setSets] = useState(() => loadLocal('vocabSets', sampleSets));
-  const [settings, setSettings] = useState(() => loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
-  const [pointsToday, setPointsToday] = useState(() => loadLocal('pointsToday', 0));
-  const [totalPoints, setTotalPoints] = useState(() => loadLocal('totalPoints', 0));
-  const [streak, setStreak] = useState(() => loadLocal('streak', 0));
-  const [lastSync, setLastSync] = useState(() => loadLocal('lastSync', null));
-  
-  // Logic cập nhật điểm mới
-  const handleQuizFinish = (finalScore) => {
-    if (finalScore > 0) {
-      setPointsToday(prevPoints => {
-        const newPoints = prevPoints + finalScore;
-        saveLocal('pointsToday', newPoints);
-        return newPoints;
-      });
-      setTotalPoints(prevPoints => {
-        const newPoints = prevPoints + finalScore;
-        saveLocal('totalPoints', newPoints);
-        return newPoints;
-      });
-      toast.success(`Đã cộng ${finalScore} điểm vào tổng điểm của bạn!`);
-    }
-    setPage('dashboard');
-  };
+  const [sets, setSets] = useState([]);
+  const [settings, setSettings] = useState({ timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true });
+  const [pointsToday, setPointsToday] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        try {
-          const docRef = doc(db, 'vocabData', currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const serverData = docSnap.data();
-            if (serverData.sets) {
-              const localMeta = getLocalMeta('vocabSets');
-              const serverUpdatedAt = serverData.sets.updatedAt;
-              const localUpdatedAt = localMeta ? localMeta.updatedAt : 0;
-              
-              if (serverUpdatedAt > localUpdatedAt) {
-                setSets(serverData.sets.data);
-                toast.info('Đã đồng bộ dữ liệu từ cloud.');
-              } else {
-                setDoc(docRef, { sets: { data: sets, updatedAt: Date.now() } }, { merge: true });
-              }
-            }
-          } else {
-            setDoc(docRef, { sets: { data: sets, updatedAt: Date.now() } });
+        const userDocRef = doc(db, 'vocabData', currentUser.uid);
+        const docSnap = await getDoc(userDocRef);
+
+        if (!docSnap.exists()) {
+          // New user, save sample data
+          await setDoc(userDocRef, {
+            sets: sampleSets,
+            settings: { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true },
+            pointsToday: 0,
+            totalPoints: 0,
+            streak: 0,
+            lastSync: new Date().toISOString()
+          });
+          toast.info('Đã tạo dữ liệu ban đầu cho bạn!');
+        }
+        
+        // Listen for real-time updates
+        const unsubDoc = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
+            setSets(data.sets);
+            setSettings(data.settings);
+            setPointsToday(data.pointsToday);
+            setTotalPoints(data.totalPoints);
+            setStreak(data.streak);
           }
-        } catch (e) { console.error('Lỗi khi đồng bộ:', e); }
+        });
+
+        // Cleanup listener when component unmounts
+        return () => unsubDoc();
+
+      } else {
+        // User logged out, clear states
+        setSets([]);
+        setSettings({ timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true });
+        setPointsToday(0);
+        setTotalPoints(0);
+        setStreak(0);
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [sets]);
-  
-  // Logic kiểm tra streak hằng ngày
-  useEffect(() => {
-    const today = new Date().toDateString();
-    const last = loadLocal('lastLogin', null);
-    if(last !== today) {
-      if(last) {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        if(new Date(last).toDateString() === yesterday.toDateString()){
-            setStreak(s => s + 1);
-        } else {
-            setStreak(0);
-        }
-      }
-      setPointsToday(0);
-      saveLocal('pointsToday', 0);
-      saveLocal('lastLogin', today);
-    }
   }, []);
+
+  const handleBack = () => {
+    setPage('dashboard');
+    window.scrollTo(0, 0);
+  };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setUser(null);
-      toast.info('Đã đăng xuất.');
+      toast.success('Đã đăng xuất thành công!');
+      // State is cleared in onAuthStateChanged listener
     } catch (e) {
-      console.error(e);
-      toast.error('Có lỗi khi đăng xuất.');
+      toast.error('Có lỗi khi đăng xuất: ' + e.message);
     }
   };
 
-  const syncToCloud = async () => {
+  const handleQuizFinish = async (score) => {
     if (!user) {
-      toast.error('Bạn cần đăng nhập để đồng bộ.');
+      toast.error('Vui lòng đăng nhập để lưu điểm!');
+      setPage('dashboard');
       return;
     }
-    setLastSync(Date.now());
-    saveLocal('lastSync', Date.now());
-    try {
-      await setDoc(doc(db, 'vocabData', user.uid), { sets: { data: sets, updatedAt: Date.now() } }, { merge: true });
-      toast.success('Đã đồng bộ dữ liệu lên cloud thành công!');
-    } catch (e) {
-      toast.error('Lỗi khi đồng bộ dữ liệu.');
-    }
-  };
-  
-  const [timer, setTimer] = useState(settings.timer);
-  const [perSession, setPerSession] = useState(settings.perSession);
-  const [dailyTarget, setDailyTarget] = useState(settings.dailyTarget);
 
-  const handleSaveSettings = () => {
-    if(dailyTarget < (settings.dailyTarget || 0)) {
-        toast.error('Mục tiêu chỉ có thể tăng, không thể giảm');
-        return;
-    }
-    const newSettings = {...settings, timer, perSession, dailyTarget};
-    setSettings(newSettings);
-    saveLocal('settings', newSettings);
-    toast.success('Đã lưu cài đặt!');
+    const userDocRef = doc(db, 'vocabData', user.uid);
+    const docSnap = await getDoc(userDocRef);
+    if (!docSnap.exists()) return;
+
+    const data = docSnap.data();
+    const newPoints = data.pointsToday + score;
+    const newTotalPoints = data.totalPoints + score;
+    const newStreak = newPoints >= data.settings.dailyTarget ? (data.streak || 0) + 1 : data.streak;
+
+    await setDoc(userDocRef, {
+      ...data,
+      pointsToday: newPoints,
+      totalPoints: newTotalPoints,
+      streak: newStreak
+    });
+    toast.success(`Đã hoàn thành bài kiểm tra! +${score} điểm.`);
     setPage('dashboard');
   };
-  
-  const renderPage = () => {
-    if (page === 'settings') {
-      return (
-        <div className="p-4 bg-white dark:bg-gray-800 rounded shadow">
-          <h3 className="font-semibold mb-3">Cài đặt</h3>
-          <label className="block text-sm">Thời gian mỗi câu (giây)</label>
-          <input type="number" value={timer} onChange={e=>setTimer(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2 dark:bg-gray-700 dark:border-gray-600" />
-          <label className="block text-sm">Số từ mỗi lần</label>
-          <input type="number" value={perSession} onChange={e=>setPerSession(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2 dark:bg-gray-700 dark:border-gray-600" />
-          <label className="block text-sm">Mục tiêu điểm hằng ngày</label>
-          <input type="number" value={dailyTarget} onChange={e=>setDailyTarget(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2 dark:bg-gray-700 dark:border-gray-600" />
-          <button onClick={handleSaveSettings} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">Lưu Cài đặt</button>
-        </div>
-      );
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+
+  const renderContent = () => {
+    if (!user) {
+      return <AuthForm auth={auth} />;
     }
-    
-    switch(page){
+    switch (page) {
       case 'dashboard':
         return (
-          <div className="p-4">
-            <h2 className="text-xl font-bold mb-4">Tổng quan</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md text-center">
-                <div className="text-4xl font-bold text-indigo-600 dark:text-indigo-400">{pointsToday}</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Điểm hôm nay / {settings.dailyTarget}</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md text-center">
-                <div className="text-4xl font-bold text-green-600 dark:text-green-400">{streak}</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Ngày liên tiếp</div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md text-center">
-                <div className="text-4xl font-bold text-purple-600 dark:text-purple-400">{totalPoints}</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Tổng điểm</div>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <button onClick={()=>setPage('quiz')} className="w-full px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition">
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-4">Dashboard</h2>
+            <p className="text-lg">Điểm hôm nay: <span className="font-bold text-indigo-600">{pointsToday}</span></p>
+            <p className="text-lg">Tổng điểm: <span className="font-bold text-indigo-600">{totalPoints}</span></p>
+            <p className="text-lg">Streak: <span className="font-bold text-indigo-600">{streak} ngày</span></p>
+            <p className="text-lg">Mục tiêu: <span className="font-bold text-indigo-600">{settings.dailyTarget} điểm</span></p>
+            <div className="mt-8 space-y-4 max-w-sm mx-auto">
+              <button onClick={() => setPage('quiz')} className="w-full px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition">
                 Bắt đầu Luyện tập
               </button>
-              <button onClick={()=>setPage('vocabManager')} className="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition">
+              <button onClick={() => setPage('vocabManager')} className="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition">
                 Quản lý Từ vựng
-              </button>
-              <button onClick={syncToCloud} className="w-full px-4 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition" disabled={!user}>
-                Đồng bộ Cloud
               </button>
             </div>
           </div>
         );
       case 'quiz':
-        return <Quiz sets={sets} settings={settings} onFinish={handleQuizFinish} />;
+        return <Quiz sets={sets} settings={settings} onFinish={handleQuizFinish} user={user} db={db} />;
       case 'vocabManager':
-        return <VocabManager sets={sets} setSets={setSets} db={db} user={user} />;
+        return <VocabManager db={db} user={user} />;
       default:
         return null;
     }
@@ -193,22 +144,175 @@ export default function App(){
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col items-center">
-      <Header 
-        title="Luyện từ vựng" 
-        onOpenSettings={()=>setPage('settings')} 
-        user={user} 
-        onLogout={handleLogout} 
-        showBackButton={page !== 'dashboard'} 
+      <Header
+        title="Luyện từ vựng"
+        onOpenSettings={() => setPage('settings')}
+        user={user}
+        onLogout={handleLogout}
+        showBackButton={page !== 'dashboard'}
         onBack={handleBack}
       />
       <main className="flex-grow container mx-auto p-4 max-w-2xl">
-        {loading ? (
-          <div className="text-center text-lg mt-10">Đang tải...</div>
-        ) : user ? (
-          renderPage()
-        ) : (
-          <AuthForm auth={auth} />
-        )}
+        {renderContent()}
+      </main>
+    </div>
+  );
+}import React, { useEffect, useState } from 'react';
+import Header from './components/Header';
+import AuthForm from './components/AuthForm';
+import VocabManager from './components/VocabManager';
+import Quiz from './components/Quiz';
+import { sampleSets } from './data/wordSets';
+import { auth, db } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { toast } from 'react-toastify';
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState('dashboard');
+  const [sets, setSets] = useState([]);
+  const [settings, setSettings] = useState({ timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true });
+  const [pointsToday, setPointsToday] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const userDocRef = doc(db, 'vocabData', currentUser.uid);
+        const docSnap = await getDoc(userDocRef);
+
+        if (!docSnap.exists()) {
+          // New user, save sample data
+          await setDoc(userDocRef, {
+            sets: sampleSets,
+            settings: { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true },
+            pointsToday: 0,
+            totalPoints: 0,
+            streak: 0,
+            lastSync: new Date().toISOString()
+          });
+          toast.info('Đã tạo dữ liệu ban đầu cho bạn!');
+        }
+        
+        // Listen for real-time updates
+        const unsubDoc = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
+            setSets(data.sets);
+            setSettings(data.settings);
+            setPointsToday(data.pointsToday);
+            setTotalPoints(data.totalPoints);
+            setStreak(data.streak);
+          }
+        });
+
+        // Cleanup listener when component unmounts
+        return () => unsubDoc();
+
+      } else {
+        // User logged out, clear states
+        setSets([]);
+        setSettings({ timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true });
+        setPointsToday(0);
+        setTotalPoints(0);
+        setStreak(0);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleBack = () => {
+    setPage('dashboard');
+    window.scrollTo(0, 0);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast.success('Đã đăng xuất thành công!');
+      // State is cleared in onAuthStateChanged listener
+    } catch (e) {
+      toast.error('Có lỗi khi đăng xuất: ' + e.message);
+    }
+  };
+
+  const handleQuizFinish = async (score) => {
+    if (!user) {
+      toast.error('Vui lòng đăng nhập để lưu điểm!');
+      setPage('dashboard');
+      return;
+    }
+
+    const userDocRef = doc(db, 'vocabData', user.uid);
+    const docSnap = await getDoc(userDocRef);
+    if (!docSnap.exists()) return;
+
+    const data = docSnap.data();
+    const newPoints = data.pointsToday + score;
+    const newTotalPoints = data.totalPoints + score;
+    const newStreak = newPoints >= data.settings.dailyTarget ? (data.streak || 0) + 1 : data.streak;
+
+    await setDoc(userDocRef, {
+      ...data,
+      pointsToday: newPoints,
+      totalPoints: newTotalPoints,
+      streak: newStreak
+    });
+    toast.success(`Đã hoàn thành bài kiểm tra! +${score} điểm.`);
+    setPage('dashboard');
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+
+  const renderContent = () => {
+    if (!user) {
+      return <AuthForm auth={auth} />;
+    }
+    switch (page) {
+      case 'dashboard':
+        return (
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-4">Dashboard</h2>
+            <p className="text-lg">Điểm hôm nay: <span className="font-bold text-indigo-600">{pointsToday}</span></p>
+            <p className="text-lg">Tổng điểm: <span className="font-bold text-indigo-600">{totalPoints}</span></p>
+            <p className="text-lg">Streak: <span className="font-bold text-indigo-600">{streak} ngày</span></p>
+            <p className="text-lg">Mục tiêu: <span className="font-bold text-indigo-600">{settings.dailyTarget} điểm</span></p>
+            <div className="mt-8 space-y-4 max-w-sm mx-auto">
+              <button onClick={() => setPage('quiz')} className="w-full px-4 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition">
+                Bắt đầu Luyện tập
+              </button>
+              <button onClick={() => setPage('vocabManager')} className="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition">
+                Quản lý Từ vựng
+              </button>
+            </div>
+          </div>
+        );
+      case 'quiz':
+        return <Quiz sets={sets} settings={settings} onFinish={handleQuizFinish} user={user} db={db} />;
+      case 'vocabManager':
+        return <VocabManager db={db} user={user} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col items-center">
+      <Header
+        title="Luyện từ vựng"
+        onOpenSettings={() => setPage('settings')}
+        user={user}
+        onLogout={handleLogout}
+        showBackButton={page !== 'dashboard'}
+        onBack={handleBack}
+      />
+      <main className="flex-grow container mx-auto p-4 max-w-2xl">
+        {renderContent()}
       </main>
     </div>
   );

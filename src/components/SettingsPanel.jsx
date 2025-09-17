@@ -1,22 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { loadLocal, saveLocal } from '../utils/storage';
 import { toast } from 'react-toastify';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
-export default function SettingsPanel({ settings, setSettings, onUpdateSettings }) {
+export default function SettingsPanel({ settings, onUpdateSettings, user, db }) {
   const [timer, setTimer] = useState(settings.timer);
   const [perSession, setPerSession] = useState(settings.perSession);
   const [dailyTarget, setDailyTarget] = useState(settings.dailyTarget);
 
-  const save = () => {
+  useEffect(() => {
+    setTimer(settings.timer);
+    setPerSession(settings.perSession);
+    setDailyTarget(settings.dailyTarget);
+  }, [settings]);
+
+  const save = async () => {
+    if (!user) {
+      toast.error('Vui lòng đăng nhập để lưu cài đặt!');
+      return;
+    }
+
     if (dailyTarget < (settings.dailyTarget || 0)) {
       toast.error('Mục tiêu chỉ có thể tăng, không thể giảm');
       return;
     }
-    const ns = { ...settings, timer, perSession, dailyTarget, canSetTarget: settings.canSetTarget };
-    setSettings(ns);
-    saveLocal('settings', ns);
-    onUpdateSettings(ns);
-    toast.success('Đã lưu cài đặt!');
+
+    const userDocRef = doc(db, 'vocabData', user.uid);
+    try {
+      await updateDoc(userDocRef, { settings: { timer, perSession, dailyTarget } });
+      toast.success('Đã lưu cài đặt!');
+      onUpdateSettings({ timer, perSession, dailyTarget });
+    } catch (e) {
+      console.error('Lỗi khi lưu cài đặt:', e);
+      toast.error('Đã xảy ra lỗi!');
+    }
   };
 
   return (
@@ -52,7 +68,7 @@ export default function SettingsPanel({ settings, setSettings, onUpdateSettings 
         </div>
         <button
           onClick={save}
-          className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition"
+          className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition"
         >
           Lưu cài đặt
         </button>
