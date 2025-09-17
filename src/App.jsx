@@ -46,10 +46,10 @@ export default function App() {
         if (dayDifference === 1) {
             newStreak++;
         } else if (dayDifference > 1) {
-            newStreak = 1; // Start a new streak
+            newStreak = 1;
         }
     } else {
-        newStreak = 1; // First time practicing, start a streak
+        newStreak = 1;
     }
 
     const newPointsToday = pointsToday + newPoints;
@@ -102,7 +102,7 @@ export default function App() {
       const settingsRef = doc(db, 'settings', user.uid);
       const settingsSnap = await getDoc(settingsRef);
 
-      const localUserMeta = getLocalMeta('pointsToday'); // Lấy meta từ một key bất kỳ để kiểm tra
+      const localUserMeta = getLocalMeta('pointsToday');
       const localVocabMeta = getLocalMeta('vocabSets');
       const localSettingsMeta = getLocalMeta('settings');
 
@@ -206,7 +206,6 @@ export default function App() {
         const dailyGoal = settings?.dailyTarget || 30;
         const progress = (pointsToday / dailyGoal) * 100;
 
-        // Reset daily points if a new day has started
         if (lastDay && today !== lastDay) {
           setPointsToday(0);
           saveLocal('pointsToday', 0);

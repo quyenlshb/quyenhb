@@ -42,13 +42,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
   };
 
   useEffect(() => {
-    const activeSetId = localStorage.getItem('activeSet');
-    if (activeSetId) {
-      generateQuiz(activeSetId);
-    }
-  }, []);
-
-  useEffect(() => {
     if (isPlaying) {
       setTimer(settings.timer);
     }
@@ -78,7 +71,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       setSelected(null);
       setShowNote(false);
       
-      // Auto-play audio when a new question loads
       if (isPlaying) {
         playKana();
       }
@@ -122,6 +114,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
   const current = pool[index];
 
+  // Kiểm tra nếu chưa có bộ từ nào được chọn, hiển thị màn hình chọn bộ từ
   if (!activeSetId) {
     return (
       <div className="p-4 space-y-4">
@@ -139,6 +132,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
     );
   }
 
+  // Hiển thị giao diện bài quiz khi đã có bộ từ
   if (pool.length === 0 || index >= pool.length) {
     return (
       <div className="p-4 text-center space-y-4">
