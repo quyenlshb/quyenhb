@@ -12,7 +12,6 @@ import { toast } from 'react-toastify';
 
 export default function App(){
   const handleBack = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
-  const handleHome = ()=>{ setPage('dashboard'); window.scrollTo(0,0); };
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState('dashboard');
@@ -23,18 +22,22 @@ export default function App(){
   const [streak, setStreak] = useState(() => loadLocal('streak', 0));
   const [lastSync, setLastSync] = useState(() => loadLocal('lastSync', null));
   
-  // Sửa lỗi ở đây: Cập nhật điểm một cách an toàn và đúng
-  const handleUpdatePoints = (points) => {
-    setPointsToday(prevPoints => {
-      const newPoints = prevPoints + points;
-      saveLocal('pointsToday', newPoints);
-      return newPoints;
-    });
-    setTotalPoints(prevPoints => {
-      const newPoints = prevPoints + points;
-      saveLocal('totalPoints', newPoints);
-      return newPoints;
-    });
+  // Logic cập nhật điểm mới
+  const handleQuizFinish = (finalScore) => {
+    if (finalScore > 0) {
+      setPointsToday(prevPoints => {
+        const newPoints = prevPoints + finalScore;
+        saveLocal('pointsToday', newPoints);
+        return newPoints;
+      });
+      setTotalPoints(prevPoints => {
+        const newPoints = prevPoints + finalScore;
+        saveLocal('totalPoints', newPoints);
+        return newPoints;
+      });
+      toast.success(`Đã cộng ${finalScore} điểm vào tổng điểm của bạn!`);
+    }
+    setPage('dashboard');
   };
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export default function App(){
               const localUpdatedAt = localMeta ? localMeta.updatedAt : 0;
               
               if (serverUpdatedAt > localUpdatedAt) {
-                setSets(serverData.sets);
+                setSets(serverData.sets.data);
                 toast.info('Đã đồng bộ dữ liệu từ cloud.');
               } else {
                 setDoc(docRef, { sets: { data: sets, updatedAt: Date.now() } }, { merge: true });
@@ -114,7 +117,6 @@ export default function App(){
     }
   };
   
-  // Dữ liệu cài đặt được quản lý trực tiếp trong component App
   const [timer, setTimer] = useState(settings.timer);
   const [perSession, setPerSession] = useState(settings.perSession);
   const [dailyTarget, setDailyTarget] = useState(settings.dailyTarget);
@@ -181,7 +183,7 @@ export default function App(){
           </div>
         );
       case 'quiz':
-        return <Quiz sets={sets} settings={settings} onFinish={()=>setPage('dashboard')} onUpdatePoints={handleUpdatePoints} />;
+        return <Quiz sets={sets} settings={settings} onFinish={handleQuizFinish} />;
       case 'vocabManager':
         return <VocabManager sets={sets} setSets={setSets} db={db} user={user} />;
       default:

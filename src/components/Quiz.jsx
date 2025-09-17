@@ -3,7 +3,7 @@ import { loadLocal, saveLocal } from '../utils/storage';
 import { toast } from 'react-toastify';
 import { FaPlay, FaArrowLeft } from 'react-icons/fa';
 
-export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
+export default function Quiz({ sets, settings, onFinish }) {
   const [activeSetId, setActiveSetId] = useState(null);
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
@@ -12,7 +12,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [score, setScore] = useState(0);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const playKana = () => {
     if (pool.length > 0 && 'speechSynthesis' in window) {
@@ -32,12 +32,17 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
     const sortedWords = activeSet.items.sort((a, b) => a.masteryLevel - b.masteryLevel);
     
-    const newPool = sortedWords.slice(0, settings.perSession);
+    // Lấy một nhóm lớn hơn (ví dụ 20 từ) và chọn ngẫu nhiên trong nhóm đó
+    const poolSize = Math.min(sortedWords.length, 20);
+    const lowMasteryPool = sortedWords.slice(0, poolSize);
+    
+    // Sau đó, chọn ngẫu nhiên số từ theo cài đặt perSession từ nhóm này
+    const newPool = lowMasteryPool.sort(() => 0.5 - Math.random()).slice(0, settings.perSession);
 
     setActiveSetId(setId);
     setPool(newPool);
     setIndex(0);
-    setScore(0);
+    setCorrectAnswers(0);
     setIsPlaying(true);
     localStorage.setItem('activeSet', setId);
   };
@@ -86,7 +91,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
     let updatedSets = sets;
     if (option === current.meaning) {
-      // Logic cho câu trả lời đúng
       updatedSets = sets.map(s => {
         if (s.id === activeSetId) {
           const updatedItems = s.items.map(item => {
@@ -99,18 +103,15 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
         }
         return s;
       });
-
-      onUpdatePoints(1); // Cập nhật điểm CHỈ khi trả lời đúng
-      setScore(s => s + 1); // Cập nhật điểm cho phiên hiện tại
-      toast.success('Chính xác! (+1 điểm)');
+      setCorrectAnswers(c => c + 1);
+      toast.success('Chính xác!');
       setTimeout(nextQuestion, 1000);
     } else {
-      // Logic cho câu trả lời sai
       updatedSets = sets.map(s => {
         if (s.id === activeSetId) {
           const updatedItems = s.items.map(item => {
             if (item.id === current.id) {
-              return { ...item, masteryLevel: 0 }; // Đặt lại về 0 khi sai
+              return { ...item, masteryLevel: 0 };
             }
             return item;
           });
@@ -132,7 +133,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
       if (s.id === activeSetId) {
         const updatedItems = s.items.map(item => {
           if (item.id === current.id) {
-            return { ...item, masteryLevel: 0 }; // Đặt lại về 0 khi hết giờ
+            return { ...item, masteryLevel: 0 };
           }
           return item;
         });
@@ -154,8 +155,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
 
   const endQuiz = () => {
     setIsPlaying(false);
-    toast.success(`Đã hoàn thành bài luyện tập. Bạn đạt được ${score} điểm!`);
-    onFinish();
+    onFinish(correctAnswers);
   };
 
   const current = pool[index];
@@ -181,8 +181,8 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
     return (
       <div className="p-4 text-center space-y-4">
         <h3 className="text-2xl font-bold">Bài luyện tập đã kết thúc!</h3>
-        <p className="text-lg">Bạn đã đạt được <span className="text-green-500 font-bold">{score}</span> điểm trong phiên này.</p>
-        <button onClick={onFinish} className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition font-bold">
+        <p className="text-lg">Bạn đã đạt được <span className="text-green-500 font-bold">{correctAnswers}</span> điểm trong phiên này.</p>
+        <button onClick={endQuiz} className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition font-bold">
           Quay lại Tổng quan
         </button>
       </div>
@@ -193,7 +193,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }) {
     <div className="p-4 space-y-4">
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md flex justify-between items-center">
         <div className="text-lg font-bold">Câu hỏi: {index + 1}/{pool.length}</div>
-        <div className="text-lg font-bold">Điểm: {score}</div>
+        <div className="text-lg font-bold">Điểm: {correctAnswers}</div>
         <div className="text-2xl font-bold text-red-500">{timer}s</div>
       </div>
       
