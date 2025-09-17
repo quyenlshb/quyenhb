@@ -35,7 +35,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints }){
     return ()=> clearTimeout(t);
   }, [timer, pool, showNote, selected]);
 
-  // Logic tạo đáp án đã được sửa
   useEffect(() => {
     if (pool.length > 0) {
       const current = pool[index];

@@ -94,6 +94,7 @@ export default function App(){
     setPointsToday(0);
     saveLocal('pointsToday', 0);
     toast.info('Phiên học hoàn tất');
+    localStorage.removeItem('activeSet'); // Dòng này đã được thêm
     setPage('dashboard');
   };
   
