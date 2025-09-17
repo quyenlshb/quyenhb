@@ -146,11 +146,17 @@ export default function VocabManager({ user, db }) {
     lines.forEach(line => {
       const parts = line.split(/\s+/);
       if (parts.length >= 3) {
+        // Lấy kanji và kana từ hai phần tử đầu
+        const kanji = parts[0];
+        const kana = parts[1];
+        // Nối tất cả các phần tử còn lại để tạo thành nghĩa đầy đủ
+        const meaning = parts.slice(2).join(' ');
+
         items.push({
           id: nanoid(),
-          kanji: parts[0],
-          kana: parts[1],
-          meaning: parts[2],
+          kanji: kanji,
+          kana: kana,
+          meaning: meaning,
           note: '',
           masteryLevel: 0,
           lastReviewedAt: null
