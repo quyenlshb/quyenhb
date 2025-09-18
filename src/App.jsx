@@ -6,7 +6,8 @@ import Quiz from './components/Quiz';
 import { sampleSets } from './data/wordSets';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; // Thêm updateDoc
+import { loadLocal, saveLocal } from './utils/storage';
 import { toast } from 'react-toastify';
 
 export default function App(){
@@ -15,192 +16,150 @@ export default function App(){
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState('dashboard');
-  const [sets, setSets] = useState(sampleSets);
-  const [settings, setSettings] = useState({ timer: 10, perSession: 10, dailyTarget: 30 });
-  const [pointsToday, setPointsToday] = useState(0);
-  const [totalPoints, setTotalPoints] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [lastSync, setLastSync] = useState(null);
-
-  // Lắng nghe trạng thái xác thực và đồng bộ dữ liệu
+  const [sets, setSets] = useState(() => loadLocal('vocabSets', sampleSets));
+  const [settings, setSettings] = useState(() => loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
+  const [pointsToday, setPointsToday] = useState(() => loadLocal('pointsToday', 0));
+  const [totalPoints, setTotalPoints] = useState(() => loadLocal('totalPoints', 0));
+  const [streak, setStreak] = useState(() => loadLocal('streak', 0));
+  const [lastSync, setLastSync] = useState(() => loadLocal('lastSync', null));
+  const [lastCheck, setLastCheck] = useState(() => loadLocal('lastCheck', null));
+  
+  const savePoints = (newPoints) => {
+    setPointsToday(newPoints);
+    setTotalPoints(p=> p + newPoints);
+    saveLocal('pointsToday', newPoints);
+    saveLocal('totalPoints', totalPoints + newPoints);
+  };
+  
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Khi đăng xuất, reset state về giá trị ban đầu và không cần đồng bộ
+      setSets(loadLocal('vocabSets', sampleSets));
+      setSettings(loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
+      setPointsToday(loadLocal('pointsToday', 0));
+      setTotalPoints(loadLocal('totalPoints', 0));
+      setStreak(loadLocal('streak', 0));
+      toast.info('Đã đăng xuất!');
+    } catch (error) {
+      toast.error('Lỗi khi đăng xuất.');
+      console.error(error);
+    }
+  };
+  
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Lấy dữ liệu người dùng từ Firestore
-        const userDocRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/profile/main`);
-        const docSnap = await getDoc(userDocRef);
-        
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setSets(data.vocabSets || sampleSets);
-          setSettings(data.settings || { timer: 10, perSession: 10, dailyTarget: 30 });
-          setPointsToday(data.pointsToday || 0);
-          setTotalPoints(data.totalPoints || 0);
-          setStreak(data.streak || 0);
-          setLastSync(data.lastSync || null);
+        setLoading(true);
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setSets(userData.vocabSets || loadLocal('vocabSets', sampleSets));
+          setSettings(userData.settings || loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
+          setPointsToday(userData.pointsToday || loadLocal('pointsToday', 0));
+          setTotalPoints(userData.totalPoints || loadLocal('totalPoints', 0));
+          setStreak(userData.streak || loadLocal('streak', 0));
+          toast.success('Dữ liệu đã được đồng bộ với Firebase!');
         } else {
-          // Tạo dữ liệu mặc định nếu chưa có
+          // Nếu đây là người dùng mới, lưu dữ liệu ban đầu lên Firestore
           await setDoc(userDocRef, {
-            vocabSets: sampleSets,
-            settings: { timer: 10, perSession: 10, dailyTarget: 30 },
-            pointsToday: 0,
-            totalPoints: 0,
-            streak: 0,
-            lastSync: Date.now()
+            email: currentUser.email,
+            vocabSets: sets,
+            settings: settings,
+            pointsToday: pointsToday,
+            totalPoints: totalPoints,
+            streak: streak,
           });
+          toast.success('Tạo tài khoản thành công!');
         }
-        
-        // Lắng nghe cập nhật dữ liệu real-time
-        const unsubscribeSnapshot = onSnapshot(userDocRef, (doc) => {
-          if (doc.exists()) {
-            const data = doc.data();
-            setSets(data.vocabSets || sampleSets);
-            setSettings(data.settings || { timer: 10, perSession: 10, dailyTarget: 30 });
-            setPointsToday(data.pointsToday || 0);
-            setTotalPoints(data.totalPoints || 0);
-            setStreak(data.streak || 0);
-            setLastSync(data.lastSync || null);
-          }
-        });
-        
-        return () => unsubscribeSnapshot();
+      } else {
+        // Khi đăng xuất, reset state về giá trị ban đầu và không cần đồng bộ
+        setSets(loadLocal('vocabSets', sampleSets));
+        setSettings(loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
+        setPointsToday(loadLocal('pointsToday', 0));
+        setTotalPoints(loadLocal('totalPoints', 0));
+        setStreak(loadLocal('streak', 0));
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  const saveSettings = async () => {
-    if(settings.dailyTarget < (settings.dailyTarget || 0)) {
-      toast.error('Mục tiêu chỉ có thể tăng, không thể giảm');
-      return;
-    }
-    const userDocRef = doc(db, `artifacts/${__app_id}/users/${user.uid}/profile/main`);
-    await updateDoc(userDocRef, { settings });
-    toast.success('Đã lưu cài đặt!');
-  };
-
-  const updatePoints = async (earnedPoints) => {
-    const newPoints = pointsToday + earnedPoints;
-    const newTotalPoints = totalPoints + earnedPoints;
-    setPointsToday(newPoints);
-    setTotalPoints(newTotalPoints);
+  const saveSettings = () => {
+    const newSettings = { timer, perSession, dailyTarget };
+    setSettings(newSettings);
+    saveLocal('settings', newSettings);
     if(user){
-      const userDocRef = doc(db, `artifacts/${__app_id}/users/${user.uid}/profile/main`);
-      await updateDoc(userDocRef, { 
-        pointsToday: newPoints,
-        totalPoints: newTotalPoints
+      updateDoc(doc(db, 'users', user.uid), {
+        settings: newSettings,
       });
     }
+    toast.success('Đã lưu cài đặt!');
   };
-
-  const logout = async () => {
-    await signOut(auth);
-    setUser(null);
-    setPage('dashboard');
-    toast.info('Đã đăng xuất!');
-  };
-
-  if(loading) return <div className="flex items-center justify-center h-screen text-gray-700">Đang tải...</div>;
   
-  const renderPage = () => {
-    switch(page){
-      case 'dashboard':
-        return (
-          <div className="container mx-auto p-4 sm:p-8">
-            <h2 className="text-3xl font-bold mb-6 text-gray-800">Bảng điều khiển</h2>
-            {user ? (
-              <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-                  <h3 className="text-xl font-bold mb-4 text-gray-800">Tiến độ của bạn</h3>
-                  <p className="mb-2">Điểm hôm nay: <span className="font-semibold text-indigo-600">{pointsToday} / {settings.dailyTarget}</span></p>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-                    <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${Math.min(100, (pointsToday / settings.dailyTarget) * 100)}%` }}></div>
-                  </div>
-                  <p className="mb-2">Tổng điểm: <span className="font-semibold text-indigo-600">{totalPoints}</span></p>
-                  <p>Chuỗi học tập liên tiếp: <span className="font-semibold text-indigo-600">{streak} ngày</span></p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-                  <h3 className="text-xl font-bold mb-4 text-gray-800">Học tập ngay!</h3>
-                  <button onClick={() => setPage('quiz')} className="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200">
-                    Bắt đầu luyện tập
-                  </button>
-                  <button onClick={() => setPage('vocab')} className="w-full mt-4 px-6 py-3 border border-indigo-600 text-indigo-600 font-semibold rounded-lg shadow-md hover:bg-indigo-50 transition duration-200">
-                    Quản lý từ vựng
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <AuthForm auth={auth} />
-            )}
-          </div>
-        );
-      case 'vocab':
-        return <VocabManager db={db} user={user} sets={sets} setSets={setSets} />;
-      case 'quiz':
-        return <Quiz sets={sets} settings={settings} onFinish={() => setPage('dashboard')} onUpdatePoints={updatePoints} />;
-      case 'settings':
-        return (
-          <div className="container mx-auto p-4 sm:p-8">
-            <div className="p-6 bg-white rounded-xl shadow-lg border border-gray-200">
-              <h3 className="text-xl font-bold mb-4 text-gray-800">Cài đặt</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Thời gian mỗi câu (giây)</label>
-                  <input
-                    type="number"
-                    value={settings.timer}
-                    onChange={e => setSettings(prev => ({ ...prev, timer: Math.max(1, Number(e.target.value)) }))}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Số từ mỗi lần</label>
-                  <input
-                    type="number"
-                    value={settings.perSession}
-                    onChange={e => setSettings(prev => ({ ...prev, perSession: Math.max(1, Number(e.target.value)) }))}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Mục tiêu điểm hằng ngày</label>
-                  <input
-                    type="number"
-                    value={settings.dailyTarget}
-                    onChange={e => setSettings(prev => ({ ...prev, dailyTarget: Math.max(1, Number(e.target.value)) }))}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                  />
-                </div>
-              </div>
-              <button
-                onClick={saveSettings}
-                className="mt-6 w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200"
-              >
-                Lưu cài đặt
-              </button>
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
+  const [timer, setTimer] = useState(settings.timer || 10);
+  const [perSession, setPerSession] = useState(settings.perSession || 10);
+  const [dailyTarget, setDailyTarget] = useState(settings.dailyTarget || 30);
+  
   return (
-    <div className="bg-gray-50 min-h-screen-minus-header font-sans text-gray-900">
+    <div className='bg-gray-50 min-h-screen'>
       <Header
-        title="Học tiếng Nhật"
+        title="Học Tiếng Nhật"
+        user={user}
+        onLogout={handleLogout}
         onBack={handleBack}
         onHome={handleHome}
-        onOpenSettings={() => setPage('settings')}
-        user={user}
-        onLogout={logout}
-        showBackButton={page !== 'dashboard'}
+        showBackButton={page === 'quiz' || page === 'vocab' || page === 'settings' || page === 'auth'}
+        showHomeButton={page !== 'dashboard'}
       />
-      {renderPage()}
+      <div className='max-w-xl mx-auto px-4 pt-4 pb-12'>
+        {loading ? (
+          <div className="text-center py-10 text-gray-500">Đang tải...</div>
+        ) : (
+          <>
+            {page === 'auth' && <AuthForm auth={auth} />}
+            {page === 'dashboard' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-xl shadow-md">
+                  <h3 className="text-xl font-bold mb-3">Thống kê</h3>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-3xl font-bold text-indigo-600">{pointsToday}</div>
+                      <div className="text-sm text-gray-500">Điểm hôm nay</div>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-indigo-600">{totalPoints}</div>
+                      <div className="text-sm text-gray-500">Tổng điểm</div>
+                    </div>
+                  </div>
+                </div>
+                <button onClick={()=>setPage('quiz')} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition duration-300">
+                  Luyện tập
+                </button>
+                <button onClick={()=>setPage('vocab')} className="w-full bg-gray-200 text-gray-800 font-bold py-3 rounded-lg shadow-md hover:bg-gray-300 transition duration-300">
+                  Quản lý từ vựng
+                </button>
+                <div className="p-4 bg-white rounded shadow transition-transform duration-300 ease-in-out hover:scale-105">
+                  <h3 className="font-semibold mb-3">Cài đặt</h3>
+                  <label className="block text-sm">Thời gian mỗi câu (giây)</label>
+                  <input type="number" value={timer} onChange={e=>setTimer(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
+                  <label className="block text-sm">Số từ mỗi lần</label>
+                  <input type="number" value={perSession} onChange={e=>setPerSession(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
+                  <label className="block text-sm">Mục tiêu điểm hằng ngày</label>
+                  <input type="number" value={dailyTarget} onChange={e=>setDailyTarget(Math.max(1, Number(e.target.value)))} className="w-full p-2 border rounded mb-2" />
+                  <button onClick={saveSettings} className="w-full bg-indigo-500 text-white py-2 rounded-lg mt-2">Lưu cài đặt</button>
+                </div>
+              </div>
+            )}
+            {page === 'vocab' && <VocabManager sets={sets} setSets={setSets} user={user} db={db} />}
+            {page === 'quiz' && <Quiz sets={sets} settings={settings} onFinish={handleBack} onUpdatePoints={savePoints} user={user} db={db} />}
+          </>
+        )}
+      </div>
     </div>
   );
 }

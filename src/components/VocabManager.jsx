@@ -1,160 +1,133 @@
-import React, { useState } from 'react';
-import { collection, doc, setDoc, getDocs, updateDoc, onSnapshot } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { loadLocal, saveLocal } from '../utils/storage';
+import { doc, updateDoc } from 'firebase/firestore'; // Cập nhật import
 import { toast } from 'react-toastify';
-import { v4 as uuidv4 } from 'uuid';
 
-export default function VocabManager({ db, user, sets, setSets }){
+export default function VocabManager({ sets, setSets, user, db }){
   const [selected, setSelected] = useState(null);
   const [paste, setPaste] = useState('');
 
-  // Lắng nghe cập nhật từ Firestore
-  React.useEffect(() => {
-    if (!user) return;
-    const userVocabRef = collection(db, `artifacts/${__app_id}/users/${user.uid}/vocabSets`);
-    const unsubscribe = onSnapshot(userVocabRef, (snapshot) => {
-      const fetchedSets = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setSets(fetchedSets);
-    });
-    return () => unsubscribe();
-  }, [user, db, setSets]);
-
   const addSet = async () => {
-    if (!user) {
-      toast.error('Vui lòng đăng nhập để thêm bộ từ.');
-      return;
-    }
     const name = prompt('Tên bộ từ mới');
-    if(!name) return;
-    const newSetId = uuidv4();
-    const newSet = { id: newSetId, name, items: [], updatedAt: Date.now() };
-    const userVocabDocRef = doc(db, `artifacts/${__app_id}/users/${user.uid}/vocabSets/${newSetId}`);
-    try{
-      await setDoc(userVocabDocRef, newSet);
+    if (!name) return;
+    const id = 'set_' + Date.now();
+    const newSet = { id, name, items: [], updatedAt: Date.now() };
+
+    const updatedSets = [...sets, newSet];
+    setSets(updatedSets);
+    saveLocal('vocabSets', updatedSets);
+    
+    // Đẩy thay đổi lên Firestore
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          vocabSets: updatedSets,
+        });
+        toast.success('Đã thêm bộ từ thành công và đồng bộ với Firebase!');
+      } catch (e) {
+        console.error("Lỗi khi thêm bộ từ vào Firestore: ", e);
+        toast.error('Có lỗi xảy ra khi đồng bộ dữ liệu. Vui lòng thử lại.');
+      }
+    } else {
       toast.success('Đã thêm bộ từ thành công!');
-    } catch(e) {
-      console.error("Lỗi khi thêm bộ từ:", e);
-      toast.error('Có lỗi xảy ra, vui lòng thử lại.');
     }
   };
 
-  const importPaste = async () => {
+  const importPaste = async () => { // Thêm async ở đây
+    const lines = paste.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
     if(!selected) {
       toast.error('Vui lòng chọn bộ từ trước khi import.');
       return;
     }
-    const lines = paste.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    const newItems = [];
+    const items = [];
     for(const line of lines){
-      const parts = line.split(/[;|,]/).map(p=>p.trim());
-      if(parts.length >= 2){
-        const kanji = parts[0] || '';
-        const kana = parts[1] || '';
-        const meaning = parts[2] || '';
-        newItems.push({
-          id: uuidv4(),
-          kanji,
-          kana,
-          meaning,
-          note: '',
-          updatedAt: Date.now()
-        });
+      const parts = line.split(/[ -]/).map(p=>p.trim());
+      if(parts.length >= 3){
+        const kanji = parts[0];
+        const kana = parts[1];
+        const meaning = parts.slice(2).join(' ');
+        items.push({ id: 'word_' + Date.now() + '_' + Math.random(), kanji, kana, meaning, note: '', updatedAt: Date.now() });
       }
     }
 
-    const updatedItems = [...selected.items, ...newItems];
-    const userVocabDocRef = doc(db, `artifacts/${__app_id}/users/${user.uid}/vocabSets/${selected.id}`);
+    const updatedSelected = {...selected, items: [...selected.items, ...items], updatedAt: Date.now()};
+    const updatedSets = sets.map(s => s.id === updatedSelected.id ? updatedSelected : s);
+    setSets(updatedSets);
+    saveLocal('vocabSets', updatedSets);
+    setPaste('');
     
-    try {
-      await updateDoc(userVocabDocRef, {
-        items: updatedItems,
-        updatedAt: Date.now()
-      });
-      setSelected({ ...selected, items: updatedItems });
-      setPaste('');
-      toast.success('Đã import từ thành công!');
-    } catch (e) {
-      console.error("Lỗi khi import từ:", e);
-      toast.error('Có lỗi xảy ra, vui lòng thử lại.');
+    // Đẩy thay đổi lên Firestore
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          vocabSets: updatedSets,
+        });
+        toast.success('Đã nhập từ thành công và đồng bộ với Firebase!');
+      } catch (e) {
+        console.error("Lỗi khi nhập từ vào Firestore: ", e);
+        toast.error('Có lỗi xảy ra khi đồng bộ dữ liệu. Vui lòng thử lại.');
+      }
+    } else {
+      toast.success('Đã nhập từ thành công!');
     }
   };
 
-  const deleteSet = async () => {
-    if (!selected) {
-      toast.error('Vui lòng chọn một bộ từ để xóa.');
+  const startQuiz = () => {
+    if(!selected) {
+      toast.error('Vui lòng chọn một bộ từ để luyện tập!');
       return;
     }
-    if (!window.confirm(`Bạn có chắc muốn xóa bộ từ "${selected.name}"?`)) {
+    if(selected.items.length === 0){
+      toast.error('Bộ từ này chưa có từ nào!');
       return;
     }
-    const userVocabDocRef = doc(db, `artifacts/${__app_id}/users/${user.uid}/vocabSets/${selected.id}`);
-    try {
-      await deleteDoc(userVocabDocRef);
-      setSelected(null);
-      toast.success('Đã xóa bộ từ thành công!');
-    } catch (e) {
-      console.error("Lỗi khi xóa bộ từ:", e);
-      toast.error('Có lỗi xảy ra, vui lòng thử lại.');
-    }
+    localStorage.setItem('activeSet', selected.id);
+    window.location.reload();
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-8">
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-gray-800">Quản lý Từ vựng</h3>
-          <button onClick={addSet} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200">
-            Thêm bộ từ
+    <div className='space-y-6'>
+      <div className="p-4 bg-white rounded-xl shadow-md">
+        <h3 className="text-xl font-bold mb-3">Quản lý bộ từ</h3>
+        <button onClick={addSet} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-indigo-700 transition duration-300">
+          Thêm bộ từ mới
+        </button>
+      </div>
+
+      <div className="p-4 bg-white rounded-xl shadow-md">
+        <h3 className="text-xl font-bold mb-3">Nhập/Luyện tập</h3>
+        <label className="block mb-2 text-sm text-gray-600">Chọn bộ từ</label>
+        <select onChange={e => setSelected(sets.find(s=>s.id===e.target.value))} value={selected?.id || ''} className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:border-blue-500">
+          <option value="">-- Chọn một bộ từ --</option>
+          {sets.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <button onClick={startQuiz} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition duration-300 mt-4">
+          Luyện tập với bộ từ này
+        </button>
+      </div>
+
+      {selected && (
+        <div className="p-4 bg-white rounded-xl shadow-md">
+          <h3 className="text-xl font-bold mb-3 flex justify-between items-center">
+            {selected.name}
+            <span className="text-sm font-normal text-gray-500">({selected.items.length} từ)</span>
+          </h3>
+          <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
+            {selected.items.map(it=>(\
+              <div key={it.id} className="p-2 bg-gray-50 rounded-lg shadow-sm">
+                <div>
+                  <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500">{it.kana}</span></div>
+                  <div className="text-sm text-gray-600">{it.meaning}</div>
+                </div>
+              </div>
+            ))}\
+          </div>
+          <textarea value={paste} onChange={e=>setPaste(e.target.value)} className="w-full p-2 border rounded-lg mt-3" rows={4} placeholder="Dán các từ vào đây, mỗi dòng một từ, theo định dạng: Kanji Kana Nghĩa" />
+          <button onClick={importPaste} className="w-full bg-gray-200 text-gray-800 font-bold py-3 rounded-lg shadow-md hover:bg-gray-300 transition duration-300 mt-2">
+            Nhập từ
           </button>
         </div>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700">Chọn bộ từ</label>
-          <select
-            value={selected?.id || ''}
-            onChange={e => setSelected(sets.find(s => s.id === e.target.value) || null)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          >
-            <option value="">-- Chọn một bộ từ --</option>
-            {sets.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-        
-        {selected && (
-          <div className="mt-4 bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-lg font-bold mb-2 flex justify-between items-center text-gray-800">
-              {selected.name}
-              <span className="text-sm font-normal text-gray-500">({selected.items.length} từ)</span>
-            </h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
-              {selected.items.map(it => (
-                <div key={it.id} className="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm">
-                  <div>
-                    <div className="font-medium text-gray-900">{it.kanji} <span className="text-sm text-gray-500">{it.kana}</span></div>
-                    <div className="text-sm text-gray-600">{it.meaning}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <textarea
-              value={paste}
-              onChange={e => setPaste(e.target.value)}
-              className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-              rows={4}
-              placeholder="Dán từ vựng ở đây. Mỗi từ một dòng, các trường ngăn cách bởi dấu phẩy hoặc chấm phẩy (Ví dụ: 食べる,たべる,Ăn)"
-            ></textarea>
-            <div className="mt-4 flex justify-end space-x-2">
-              <button onClick={importPaste} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-200">
-                Thêm từ đã dán
-              </button>
-              <button onClick={deleteSet} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-200">
-                Xóa bộ từ
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

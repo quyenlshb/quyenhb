@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { googleProvider } from '../firebase'; // Đảm bảo đường dẫn này đúng
+import { googleProvider } from '../firebase';
 
 export default function AuthForm({ auth }){
   const [mode, setMode] = useState('login');
@@ -18,7 +18,27 @@ export default function AuthForm({ auth }){
         await createUserWithEmailAndPassword(auth, email, password);
       }
     } catch(e){
-      setErr(e.message);
+      // improved error handling
+      switch (e.code) {
+        case 'auth/wrong-password':
+          setErr('Mật khẩu không đúng.');
+          break;
+        case 'auth/user-not-found':
+          setErr('Tài khoản không tồn tại.');
+          break;
+        case 'auth/email-already-in-use':
+          setErr('Email đã được sử dụng.');
+          break;
+        case 'auth/invalid-email':
+          setErr('Email không hợp lệ.');
+          break;
+        case 'auth/weak-password':
+          setErr('Mật khẩu phải có ít nhất 6 ký tự.');
+          break;
+        default:
+          setErr('Lỗi đăng nhập/đăng ký. Vui lòng thử lại.');
+          console.error(e);
+      }
     }
   };
 
@@ -27,7 +47,8 @@ export default function AuthForm({ auth }){
     try {
       await signInWithPopup(auth, googleProvider);
     } catch(e){
-      setErr(e.message);
+      setErr('Lỗi đăng nhập bằng Google. Vui lòng thử lại.');
+      console.error(e);
     }
   };
 
@@ -36,7 +57,7 @@ export default function AuthForm({ auth }){
       <h3 className="text-xl font-bold mb-4 text-center">{mode==='login' ? 'Đăng nhập' : 'Đăng ký'}</h3>
       <form onSubmit={submit} className="space-y-4">
         <input className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input type="password" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Mật khẩu" value={password} onChange={e=>setPassword(e.target.value)} />
+        <input className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Mật khẩu" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         {err && <div className="text-red-500 text-sm">{err}</div>}
         <div className="flex justify-center">
           <button type="submit" className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200">
@@ -60,7 +81,7 @@ export default function AuthForm({ auth }){
           </div>
         </div>
         <button onClick={signInWithGoogle} className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-md hover:bg-gray-100 transition duration-200">
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" className="h-5 w-5 mr-2"/>
+          <img src="https://www.vectorlogo.zone/logos/google/google-icon.svg" alt="Google" className="w-6 h-6 mr-2" />
           Đăng nhập bằng Google
         </button>
       </div>
