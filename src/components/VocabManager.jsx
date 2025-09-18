@@ -113,7 +113,7 @@ export default function VocabManager({ sets, setSets, user, db }){
             <span className="text-sm font-normal text-gray-500">({selected.items.length} từ)</span>
           </h3>
           <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
-            {selected.items.map(it=>(\
+            {selected.items.map(it=>(
               <div key={it.id} className="p-2 bg-gray-50 rounded-lg shadow-sm">
                 <div>
                   <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500">{it.kana}</span></div>
