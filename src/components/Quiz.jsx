@@ -3,11 +3,11 @@ import { loadLocal, saveLocal } from '../utils/storage';
 import { doc, setDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 
-export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db }) {
+export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db, setSets }) {
   const [activeSetId, setActiveSetId] = useState(localStorage.getItem('activeSet') || '');
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
-  const [timer, setTimer] = useState(0);
+  const [timer, setTimer] = useState(settings.timer || 15);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
@@ -25,124 +25,191 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
   // Khởi tạo quiz
   useEffect(() => {
     const setObj = sets.find(s => s.id === activeSetId);
-    if (setObj && setObj.items.length > 0) {
-      const shuffled = [...setObj.items].sort(() => 0.5 - Math.random());
-      setPool(shuffled.slice(0, settings.perSession || 10));
-      setTimer(settings.timer || 15);
-    } else {
+    if (!setObj || setObj.items.length === 0) {
       onFinish();
+      return;
     }
+
+    const allItems = setObj.items;
+
+    // Sắp xếp các từ theo điểm số (ưu tiên từ khó - điểm thấp hơn)
+    const sortedItems = [...allItems].sort((a, b) => (a.points || 100) - (b.points || 100));
+
+    // Lấy số từ cần học
+    const wordsToLearn = sortedItems.slice(0, settings.perSession || 4);
+    if (wordsToLearn.length === 0) {
+      toast.info("Bộ từ này trống hoặc bạn đã thuộc tất cả các từ!");
+      onFinish();
+      return;
+    }
+
+    // Lặp lại mỗi từ 4 lần
+    let quizItems = [];
+    for (let i = 0; i < 4; i++) {
+      quizItems = quizItems.concat(wordsToLearn);
+    }
+
+    // Xáo trộn ngẫu nhiên toàn bộ pool
+    const shuffledPool = quizItems.sort(() => 0.5 - Math.random());
+    setPool(shuffledPool);
+    setTimer(settings.timer);
+    
   }, [activeSetId, sets, settings, onFinish]);
 
-  // Countdown timer
+  const current = pool[index];
+
+  // Lựa chọn đáp án
   useEffect(() => {
-    if (!pool.length || showAnswer) return;
-    if (timer > 0) {
-      const t = setTimeout(() => setTimer(timer - 1), 1000);
-      return () => clearTimeout(t);
-    } else {
-      setShowAnswer(true);
+    if (!current) return;
+    const correctOption = current.meaning;
+    const otherMeanings = sets.flatMap(s => s.items).map(item => item.meaning).filter(m => m !== correctOption);
+    const shuffledOthers = otherMeanings.sort(() => 0.5 - Math.random()).slice(0, 3);
+    const newOptions = [...shuffledOthers, correctOption].sort(() => 0.5 - Math.random());
+    setOptions(newOptions);
+    setShowAnswer(false);
+    setSelected(null);
+    setTimer(settings.timer);
+  }, [current, sets, settings]);
+
+  // Bộ đếm ngược
+  useEffect(() => {
+    if (showAnswer) return;
+    const countdown = setInterval(() => {
+      setTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(countdown);
+          handleSkip();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(countdown);
+  }, [showAnswer, current]);
+
+  // Lưu điểm từ và đồng bộ lên Firebase
+  const updateWordPoints = (word, isCorrect) => {
+    const newPoints = (word.points || 100) + (isCorrect ? 10 : -20);
+    
+    const updatedSets = sets.map(s => {
+      if (s.id === activeSetId) {
+        return {
+          ...s,
+          items: s.items.map(item => {
+            if (item.id === word.id) {
+              return { ...item, points: newPoints };
+            }
+            return item;
+          })
+        };
+      }
+      return s;
+    });
+    
+    setSets(updatedSets);
+    if (user) {
+      setDoc(doc(db, 'users', user.uid), { sets: updatedSets }, { merge: true }).catch(e => {
+        console.error("Lỗi đồng bộ điểm từ: ", e);
+      });
     }
-  }, [timer, showAnswer, pool]);
+  };
 
-  // Sinh đáp án (4 lựa chọn)
-  useEffect(() => {
-    if (!pool.length) return;
-    const current = pool[index];
-    const allMeanings = sets.flatMap(s => s.items).map(it => it.meaning);
-    const fake = allMeanings.filter(m => m !== current.meaning).sort(() => 0.5 - Math.random()).slice(0, 3);
-    setOptions([...fake, current.meaning].sort(() => 0.5 - Math.random()));
-  }, [index, pool, sets]);
-
-  const handleSelect = (opt) => {
-    setSelected(opt);
+  const handleAnswer = (option) => {
+    setSelected(option);
     setShowAnswer(true);
-    if (opt === pool[index].meaning) {
+    if (option === current.meaning) {
       setScore(score + 1);
-      onUpdatePoints(1);
-      toast.success('Chính xác!');
-      playAudio(pool[index].kanji || pool[index].kana);
-      setTimeout(() => nextQuestion(), 1500);
+      playAudio(current.kana);
+      updateWordPoints(current, true);
+      toast.success('Chính xác!', { autoClose: 1000 });
+      setTimeout(nextQuestion, 1500);
     } else {
-      toast.error('Sai rồi!');
+      updateWordPoints(current, false);
+      toast.error('Sai rồi.', { autoClose: 1500 });
     }
+  };
+
+  const handleSkip = () => {
+    setShowAnswer(true);
+    updateWordPoints(current, false);
+    toast.info('Bạn đã bỏ qua câu hỏi.', { autoClose: 1500 });
   };
 
   const nextQuestion = () => {
-    if (index + 1 < pool.length) {
+    if (index < pool.length - 1) {
       setIndex(index + 1);
-      setTimer(settings.timer || 15);
-      setShowAnswer(false);
-      setSelected(null);
+      setTimer(settings.timer);
     } else {
+      onUpdatePoints(score);
+      toast.success(`Bạn đã hoàn thành phiên học! Bạn đạt được ${score} điểm.`, { autoClose: 3000 });
       onFinish();
-      localStorage.removeItem('activeSet');
     }
   };
 
-  const handleSkip = () => setShowAnswer(true);
+  const handleNoteSave = async (newNote) => {
+    const updatedSets = sets.map(s => {
+      if (s.id === activeSetId) {
+        return {
+          ...s,
+          items: s.items.map(item => {
+            if (item.id === current.id) {
+              return { ...item, note: newNote };
+            }
+            return item;
+          })
+        };
+      }
+      return s;
+    });
 
-  const handleNoteSave = async (note) => {
-    const setsLocal = loadLocal('vocabSets', []);
-    const setObj = setsLocal.find(s => s.id === activeSetId);
-    if (!setObj) return;
-
-    setObj.items = setObj.items.map(it =>
-      it.id === pool[index].id ? { ...it, note, updatedAt: Date.now() } : it
-    );
-    saveLocal('vocabSets', setsLocal);
-
+    setSets(updatedSets);
+    saveLocal('vocabSets', updatedSets);
     if (user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), { vocabSets: setsLocal }, { merge: true });
-        toast.success('Đã lưu ghi chú!');
+        await setDoc(doc(db, 'users', user.uid), { sets: updatedSets }, { merge: true });
+        toast.success('Đã lưu ghi chú!', { autoClose: 1500 });
       } catch (e) {
-        console.error("Lỗi đồng bộ:", e);
-        toast.error('Không thể đồng bộ dữ liệu.');
+        console.error("Lỗi đồng bộ ghi chú: ", e);
       }
     }
   };
 
-  if (!pool.length) {
-    return <p className="text-center">Không có từ để luyện tập.</p>;
+  if (pool.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 min-h-screen-minus-header">
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg text-center">
+          <p className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Vui lòng chọn một bộ từ trong mục quản lý.</p>
+          <button onClick={onFinish} className="px-6 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700">Quay lại</button>
+        </div>
+      </div>
+    );
   }
 
-  const current = pool[index];
-  const progressPercent = Math.round(((index + 1) / pool.length) * 100);
-
   return (
-    <div className="space-y-6">
-      {/* Thanh điểm & progress */}
-      <div className="p-4 bg-white rounded-xl shadow flex justify-between items-center">
-        <div className="text-lg font-bold text-indigo-600">Điểm: {score}</div>
-        <div className="w-2/3 bg-gray-200 h-3 rounded-full overflow-hidden">
-          <div
-            className="bg-green-500 h-3"
-            style={{ width: `${progressPercent}%` }}
-          ></div>
-        </div>
-        <div className="text-sm text-gray-600 ml-2">
-          {index + 1}/{pool.length}
-        </div>
+    <div className="flex flex-col items-center p-4 md:p-8 min-h-screen-minus-header bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+      {/* ProgressBar */}
+      <div className="w-full max-w-2xl bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+        <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(index / pool.length) * 100}%` }}></div>
       </div>
+      
+      {/* Timer */}
+      <div className={`font-bold text-3xl mb-6 ${timer <= 3 ? 'text-red-500 animate-pulse' : 'text-gray-700 dark:text-gray-300'}`}>{timer}s</div>
 
-      {/* Thông tin câu hỏi */}
-      <div className="p-4 bg-white rounded-xl shadow text-center">
-        <div className="text-3xl font-bold text-indigo-600 my-3">{current.kanji}</div>
-        <div className="text-lg text-gray-500 mb-2">{current.kana}</div>
-        {!showAnswer && (
-          <div className="text-lg text-gray-700">⏱ {timer}s</div>
-        )}
+      {/* Question Card */}
+      <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:p-8 mb-6 text-center transition-transform duration-300 ease-in-out">
+        <h2 className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 mb-4">{current.kanji}</h2>
+        <p className="text-lg text-gray-700 dark:text-gray-300 font-medium">{current.kana}</p>
       </div>
-
-      {/* Lựa chọn đáp án */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      
+      {/* Options */}
+      <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4">
         {options.map(opt => (
           <button
             key={opt}
-            onClick={() => handleSelect(opt)}
+            onClick={() => handleAnswer(opt)}
             disabled={showAnswer}
-            className={`p-4 rounded-lg shadow font-semibold transition 
+            className={`
+              w-full p-4 text-lg rounded-lg shadow font-semibold transition
               ${showAnswer
                 ? opt === current.meaning
                   ? 'bg-green-500 text-white'
@@ -167,11 +234,11 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
 
       {/* Đáp án + Ghi chú */}
       {showAnswer && (
-        <div className="p-4 bg-gray-100 rounded-lg shadow-inner">
-          <p className="font-semibold">Đáp án:</p>
-          <p className="text-lg font-bold">{current.kana} - {current.meaning}</p>
+        <div className="w-full max-w-2xl p-4 bg-gray-100 dark:bg-gray-700 rounded-lg shadow-inner mt-6">
+          <p className="font-semibold text-gray-900 dark:text-white">Đáp án:</p>
+          <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{current.kana} - {current.meaning}</p>
           <textarea
-            className="w-full p-2 border rounded-lg mt-3"
+            className="w-full p-2 border rounded-lg mt-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             defaultValue={current.note}
             onBlur={e => handleNoteSave(e.target.value)}
             placeholder="Thêm ghi chú..."
@@ -179,7 +246,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
           <div className="flex justify-end mt-3">
             <button
               onClick={nextQuestion}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
             >
               Tiếp theo
             </button>
