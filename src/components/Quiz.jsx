@@ -43,9 +43,9 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       return;
     }
 
-    // Lặp lại mỗi từ 4 lần
+    // Lặp lại mỗi từ 3 lần
     let quizItems = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       quizItems = quizItems.concat(wordsToLearn);
     }
 
@@ -122,7 +122,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       playAudio(current.kana);
       updateWordPoints(current, true);
       toast.success('Chính xác!', { autoClose: 1000 });
-      setTimeout(nextQuestion, 1500);
+      setTimeout(nextQuestion, 1500); // Tự động chuyển câu hỏi sau 1.5s
     } else {
       updateWordPoints(current, false);
       toast.error('Sai rồi.', { autoClose: 1500 });
