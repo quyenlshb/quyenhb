@@ -198,7 +198,9 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       {/* Question Card */}
       <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:p-8 mb-6 text-center transition-transform duration-300 ease-in-out">
         <h2 className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 mb-4">{current.kanji}</h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300 font-medium">{current.kana}</p>
+        {showAnswer && (
+          <p className="text-lg text-gray-700 dark:text-gray-300 font-medium">{current.kana}</p>
+        )}
       </div>
       
       {/* Options */}
