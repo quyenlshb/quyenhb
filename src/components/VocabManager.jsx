@@ -78,11 +78,10 @@ export default function VocabManager({ sets, setSets, user, db }) {
 
     syncToFirestore(updatedSets, 'Đã nhập từ thành công');
     setPaste('');
-    setSelected({ ...selected, items: [...selected.items, ...newWords] });
+    handleSelectSet(updatedSets.find(s => s.id === selected.id)); // luôn sort lại
   };
   
   const handleSelectSet = (s) => {
-    // Sắp xếp các từ theo điểm số từ bé đến lớn trước khi hiển thị
     const sortedItems = [...s.items].sort((a, b) => (a.points || 100) - (b.points || 100));
     setSelected({ ...s, items: sortedItems });
     setSelectedSetId(s.id);
@@ -98,10 +97,7 @@ export default function VocabManager({ sets, setSets, user, db }) {
       return s;
     });
     syncToFirestore(updatedSets, 'Đã xóa từ thành công');
-    if (selected && selected.id === setId) {
-      const sortedItems = updatedSets.find(s => s.id === setId).items.sort((a, b) => (a.points || 100) - (b.points || 100));
-      setSelected({ ...selected, items: sortedItems });
-    }
+    handleSelectSet(updatedSets.find(s => s.id === setId));
   };
 
   const editWord = (setId, word) => {
@@ -126,13 +122,7 @@ export default function VocabManager({ sets, setSets, user, db }) {
     });
 
     syncToFirestore(updatedSets, 'Đã cập nhật từ thành công');
-    if (selected && selected.id === setId) {
-      const sortedItems = updatedSets.find(s => s.id === setId).items.sort((a, b) => (a.points || 100) - (b.points || 100));
-      setSelected({
-        ...selected,
-        items: sortedItems
-      });
-    }
+    handleSelectSet(updatedSets.find(s => s.id === setId));
   };
 
 
@@ -193,16 +183,22 @@ export default function VocabManager({ sets, setSets, user, db }) {
         {/* Danh sách từ chi tiết */}
         {selected && selected.items.length > 0 && (
           <div className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-md">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-200">Từ vựng trong "{selected.name}"</h3>
+            <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-gray-200">
+              Từ vựng trong "{selected.name}" (sắp xếp theo điểm tăng dần)
+            </h3>
             <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
               {selected.items.map(it => (
-                <div key={it.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm flex justify-between items-center">
+                <div 
+                  key={it.id} 
+                  className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm flex justify-between items-center"
+                >
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 dark:text-white">
-                      {it.kanji} <span className="text-sm text-gray-500 dark:text-gray-400">{it.kana}</span>
-                      {it.points !== undefined && (
-                        <span className="text-xs ml-2 text-blue-500 dark:text-blue-400">({it.points} pts)</span>
-                      )}
+                    <div className="font-medium text-gray-900 dark:text-white flex items-center">
+                      <span className="mr-2">{it.kanji}</span> 
+                      <span className="text-sm text-gray-500 dark:text-gray-400">{it.kana}</span>
+                      <span className="ml-3 px-2 py-1 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300">
+                        {it.points ?? 100} pts
+                      </span>
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">{it.meaning}</div>
                     {it.note && <div className="text-xs mt-1 text-gray-400">Ghi chú: {it.note}</div>}
