@@ -39,7 +39,7 @@ export default function App(){
       setPointsToday(loadLocal('pointsToday', 0));
       setTotalPoints(loadLocal('totalPoints', 0));
       setStreak(loadLocal('streak', 0));
-      setPage('dashboard'); // Trở về dashboard sau khi đăng xuất
+      setPage('dashboard');
       toast.info('Đã đăng xuất!');
     } catch (error) {
       toast.error('Lỗi khi đăng xuất.');
@@ -52,27 +52,35 @@ export default function App(){
       setUser(currentUser);
       if (currentUser) {
         setLoading(true);
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setSets(userData.vocabSets || loadLocal('vocabSets', sampleSets));
-          setSettings(userData.settings || loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
-          setPointsToday(userData.pointsToday || loadLocal('pointsToday', 0));
-          setTotalPoints(userData.totalPoints || loadLocal('totalPoints', 0));
-          setStreak(userData.streak || loadLocal('streak', 0));
-          toast.success('Dữ liệu đã được đồng bộ với Firebase!');
-        } else {
-          await setDoc(userDocRef, {
-            email: currentUser.email,
-            vocabSets: sets,
-            settings: settings,
-            pointsToday: pointsToday,
-            totalPoints: totalPoints,
-            streak: streak,
-          });
-          toast.success('Tạo tài khoản thành công!');
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setSets(userData.vocabSets || loadLocal('vocabSets', sampleSets));
+            setSettings(userData.settings || loadLocal('settings', { timer: 10, perSession: 10, dailyTarget: 30, canSetTarget: true }));
+            setPointsToday(userData.pointsToday || loadLocal('pointsToday', 0));
+            setTotalPoints(userData.totalPoints || loadLocal('totalPoints', 0));
+            setStreak(userData.streak || loadLocal('streak', 0));
+            toast.success('Dữ liệu đã được đồng bộ với Firebase!');
+          } else {
+            // Nếu đây là người dùng mới, lưu dữ liệu ban đầu lên Firestore
+            await setDoc(userDocRef, {
+              email: currentUser.email,
+              vocabSets: sets,
+              settings: settings,
+              pointsToday: pointsToday,
+              totalPoints: totalPoints,
+              streak: streak,
+            });
+            toast.success('Tạo tài khoản thành công!');
+          }
+        } catch (error) {
+          console.error("Lỗi khi đồng bộ dữ liệu từ Firebase:", error);
+          toast.error("Không thể đồng bộ dữ liệu. Vui lòng thử lại.");
+        } finally {
+          setLoading(false);
         }
       } else {
         setSets(loadLocal('vocabSets', sampleSets));
@@ -80,8 +88,8 @@ export default function App(){
         setPointsToday(loadLocal('pointsToday', 0));
         setTotalPoints(loadLocal('totalPoints', 0));
         setStreak(loadLocal('streak', 0));
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsub();
