@@ -33,7 +33,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
 
     const allItems = setObj.items;
 
-    // Sắp xếp các từ theo điểm số (ưu tiên từ khó - điểm thấp hơn)
+    // Sắp xếp theo độ khó (points thấp trước)
     const sortedItems = [...allItems].sort((a, b) => (a.points || 100) - (b.points || 100));
 
     // Lấy số từ cần học
@@ -50,7 +50,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       quizItems = quizItems.concat(wordsToLearn);
     }
 
-    // Xáo trộn ngẫu nhiên toàn bộ pool
+    // Xáo trộn
     const shuffledPool = quizItems.sort(() => 0.5 - Math.random());
     setPool(shuffledPool);
     setTimer(settings.timer);
@@ -59,7 +59,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
 
   const current = pool[index];
 
-  // Lựa chọn đáp án
+  // Sinh đáp án
   useEffect(() => {
     if (!current) return;
     const correctOption = current.meaning;
@@ -72,7 +72,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     setTimer(settings.timer);
   }, [current, sets, settings]);
 
-  // Bộ đếm ngược
+  // Đếm ngược
   useEffect(() => {
     if (showAnswer) return;
     const countdown = setInterval(() => {
@@ -88,7 +88,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     return () => clearInterval(countdown);
   }, [showAnswer, current]);
 
-  // Lưu điểm từ và đồng bộ lên Firebase
+  // Lưu điểm từ
   const updateWordPoints = (word, isCorrect) => {
     const newPoints = (word.points || 100) + (isCorrect ? 10 : -20);
     
@@ -115,24 +115,34 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     }
   };
 
+  // Khi chọn đáp án
   const handleAnswer = (option) => {
     setSelected(option);
     setShowAnswer(true);
+
     if (option === current.meaning) {
-      setScore(score + 1);
+      setScore(prev => prev + 1); // dùng callback để tránh score cũ
       playAudio(current.kana);
       updateWordPoints(current, true);
       toast.success('Chính xác!', { autoClose: 1000 });
-      setIsAutoNext(true);
-      setTimeout(() => {
-        nextQuestion();
-        setIsAutoNext(false);
-      }, 1500);
+      setIsAutoNext(true); // bật cờ, để useEffect xử lý
     } else {
       updateWordPoints(current, false);
       toast.error('Sai rồi.', { autoClose: 1500 });
     }
   };
+
+  // Auto next sau khi trả lời đúng
+  useEffect(() => {
+    if (isAutoNext) {
+      const timer = setTimeout(() => {
+        nextQuestion();
+        setIsAutoNext(false);
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isAutoNext]);
 
   const handleSkip = () => {
     setShowAnswer(true);
