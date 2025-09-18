@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loadLocal, saveLocal } from '../utils/storage';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { FaTrashAlt } from 'react-icons/fa';
 
@@ -20,9 +20,9 @@ export default function VocabManager({ sets, setSets, user, db }){
     
     if (user) {
       try {
-        await updateDoc(doc(db, 'users', user.uid), {
+        await setDoc(doc(db, 'users', user.uid), {
           vocabSets: updatedSets,
-        });
+        }, { merge: true });
         toast.success('Đã thêm bộ từ thành công và đồng bộ với Firebase!');
       } catch (e) {
         console.error("Lỗi khi thêm bộ từ vào Firestore: ", e);
@@ -58,9 +58,9 @@ export default function VocabManager({ sets, setSets, user, db }){
     
     if (user) {
       try {
-        await updateDoc(doc(db, 'users', user.uid), {
+        await setDoc(doc(db, 'users', user.uid), {
           vocabSets: updatedSets,
-        });
+        }, { merge: true });
         toast.success('Đã nhập từ thành công và đồng bộ với Firebase!');
       } catch (e) {
         console.error("Lỗi khi nhập từ vào Firestore: ", e);
@@ -79,9 +79,9 @@ export default function VocabManager({ sets, setSets, user, db }){
 
       if (user) {
         try {
-          await updateDoc(doc(db, 'users', user.uid), {
+          await setDoc(doc(db, 'users', user.uid), {
             vocabSets: updatedSets,
-          });
+          }, { merge: true });
           toast.success('Đã xóa bộ từ thành công và đồng bộ với Firebase!');
         } catch (e) {
           console.error("Lỗi khi xóa bộ từ khỏi Firestore: ", e);
