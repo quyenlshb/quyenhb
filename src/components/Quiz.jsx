@@ -122,7 +122,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       playAudio(current.kana);
       updateWordPoints(current, true);
       toast.success('Chính xác!', { autoClose: 1000 });
-      setTimeout(nextQuestion, 1500); // Tự động chuyển câu hỏi sau 1.5s
+      setTimeout(nextQuestion, 1500);
     } else {
       updateWordPoints(current, false);
       toast.error('Sai rồi.', { autoClose: 1500 });
@@ -187,14 +187,17 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
 
   return (
     <div className="flex flex-col items-center p-4 md:p-8 min-h-screen-minus-header bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+      {/* Thông tin hiển thị */}
+      <div className="w-full max-w-2xl flex justify-between items-center mb-4">
+        <div className="text-lg font-bold text-gray-700 dark:text-gray-300">Score: {score}</div>
+        <div className={`font-bold text-3xl ${timer <= 3 ? 'text-red-500 animate-pulse' : 'text-gray-700 dark:text-gray-300'}`}>{timer}s</div>
+      </div>
+
       {/* ProgressBar */}
       <div className="w-full max-w-2xl bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
         <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(index / pool.length) * 100}%` }}></div>
       </div>
       
-      {/* Timer */}
-      <div className={`font-bold text-3xl mb-6 ${timer <= 3 ? 'text-red-500 animate-pulse' : 'text-gray-700 dark:text-gray-300'}`}>{timer}s</div>
-
       {/* Question Card */}
       <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:p-8 mb-6 text-center transition-transform duration-300 ease-in-out">
         <h2 className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 mb-4">{current.kanji}</h2>
