@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { loadLocal, saveLocal } from '../utils/storage';
 import { doc, updateDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import { FaTrashAlt } from 'react-icons/fa'; // Import icon xóa
+import { FaTrashAlt } from 'react-icons/fa';
 
 export default function VocabManager({ sets, setSets, user, db }){
   const [selected, setSelected] = useState(null);
@@ -90,7 +90,7 @@ export default function VocabManager({ sets, setSets, user, db }){
       } else {
         toast.success('Đã xóa bộ từ thành công!');
       }
-      setSelected(null); // Bỏ chọn bộ từ sau khi xóa
+      setSelected(null);
     }
   };
 
@@ -148,14 +148,14 @@ export default function VocabManager({ sets, setSets, user, db }){
             <span className="text-sm font-normal text-gray-500">({selected.items.length} từ)</span>
           </h3>
           <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
-            {selected.items.map(it=>(\
+            {selected.items.map(it=>(
               <div key={it.id} className="p-2 bg-gray-50 rounded-lg shadow-sm">
                 <div>
                   <div className="font-medium">{it.kanji} <span className="text-sm text-gray-500">{it.kana}</span></div>
                   <div className="text-sm text-gray-600">{it.meaning}</div>
                 </div>
               </div>
-            ))}\
+            ))}
           </div>
           <textarea value={paste} onChange={e=>setPaste(e.target.value)} className="w-full p-2 border rounded-lg mt-3" rows={4} placeholder="Dán các từ vào đây, mỗi dòng một từ, theo định dạng: Kanji Kana Nghĩa" />
           <button onClick={importPaste} className="w-full bg-gray-200 text-gray-800 font-bold py-3 rounded-lg shadow-md hover:bg-gray-300 transition duration-300 mt-2">
