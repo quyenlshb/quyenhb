@@ -59,7 +59,7 @@ export default function VocabManager({ sets, setSets, user, db }) {
         const kana = parts[1];
         const meaning = parts.slice(2).join(' ');
         const id = 'word_' + Date.now() + Math.random().toString(36).substr(2, 9);
-        return { id, kanji, kana, meaning, note: '', points: 100 }; // Gán điểm ban đầu cho từ mới
+        return { id, kanji, kana, meaning, note: '', points: 100 };
       }
       return null;
     }).filter(item => item);
@@ -82,12 +82,15 @@ export default function VocabManager({ sets, setSets, user, db }) {
   };
   
   const handleSelectSet = (s) => {
-    setSelected(s);
+    // Sắp xếp các từ theo điểm số từ bé đến lớn trước khi hiển thị
+    const sortedItems = [...s.items].sort((a, b) => (a.points || 100) - (b.points || 100));
+    setSelected({ ...s, items: sortedItems });
     setSelectedSetId(s.id);
     localStorage.setItem('activeSet', s.id);
   };
 
   const deleteWord = (setId, wordId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa từ này?')) return;
     const updatedSets = sets.map(s => {
       if (s.id === setId) {
         return { ...s, items: s.items.filter(item => item.id !== wordId) };
@@ -96,7 +99,8 @@ export default function VocabManager({ sets, setSets, user, db }) {
     });
     syncToFirestore(updatedSets, 'Đã xóa từ thành công');
     if (selected && selected.id === setId) {
-      setSelected({ ...selected, items: selected.items.filter(item => item.id !== wordId) });
+      const sortedItems = updatedSets.find(s => s.id === setId).items.sort((a, b) => (a.points || 100) - (b.points || 100));
+      setSelected({ ...selected, items: sortedItems });
     }
   };
 
@@ -123,11 +127,10 @@ export default function VocabManager({ sets, setSets, user, db }) {
 
     syncToFirestore(updatedSets, 'Đã cập nhật từ thành công');
     if (selected && selected.id === setId) {
+      const sortedItems = updatedSets.find(s => s.id === setId).items.sort((a, b) => (a.points || 100) - (b.points || 100));
       setSelected({
         ...selected,
-        items: selected.items.map(item =>
-          item.id === word.id ? { ...item, kanji: newKanji, kana: newKana, meaning: newMeaning, note: newNote } : item
-        )
+        items: sortedItems
       });
     }
   };
@@ -176,7 +179,7 @@ export default function VocabManager({ sets, setSets, user, db }) {
               onChange={e => setPaste(e.target.value)}
               className="w-full p-2 border rounded-lg mt-1 text-gray-900 dark:text-white bg-white dark:bg-gray-800"
               rows={4}
-              placeholder="Dán các từ vào đây, mỗi dòng một từ, theo định dạng:&#10;Kanji Kana Nghĩa"
+              placeholder="Dán các từ vào đây, mỗi dòng một từ, theo định dạng:\nKanji Kana Nghĩa"
             />
             <button
               onClick={importPaste}
