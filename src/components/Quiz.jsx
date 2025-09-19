@@ -21,7 +21,28 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     }
   };
 
-  // Khởi tạo quiz
+  // Hàm tạo đáp án trắc nghiệm
+  const generateOptions = (currentWord, allItems) => {
+    const otherWords = allItems.filter(item => item.id !== currentWord.id);
+    const newOptions = [currentWord.meaning];
+    while (newOptions.length < 4 && otherWords.length > 0) {
+      const randomIndex = Math.floor(Math.random() * otherWords.length);
+      const randomMeaning = otherWords[randomIndex].meaning;
+      if (!newOptions.includes(randomMeaning)) {
+        newOptions.push(randomMeaning);
+      }
+      otherWords.splice(randomIndex, 1);
+    }
+    
+    // Xáo trộn các lựa chọn
+    for (let i = newOptions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
+    }
+    setOptions(newOptions);
+  };
+
+  // Khởi tạo quiz và đáp án cho câu hỏi đầu tiên
   useEffect(() => {
     const setObj = sets.find(s => s.id === activeSetId);
     if (!setObj || setObj.items.length === 0) {
@@ -48,38 +69,20 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
 
     setPool(newPool);
     setScore(0);
-  }, [sets, activeSetId, onFinish, settings.perSession]);
-
-  // Tạo đáp án trắc nghiệm khi câu hỏi thay đổi
-  useEffect(() => {
-    if (pool.length > 0 && index < pool.length) {
-      const currentWord = pool[index];
-      const otherWords = sets.find(s => s.id === activeSetId)?.items.filter(item => item.id !== currentWord.id) || [];
-      
-      const newOptions = [currentWord.meaning];
-      while (newOptions.length < 4 && otherWords.length > 0) {
-        const randomIndex = Math.floor(Math.random() * otherWords.length);
-        const randomMeaning = otherWords[randomIndex].meaning;
-        if (!newOptions.includes(randomMeaning)) {
-          newOptions.push(randomMeaning);
-        }
-        otherWords.splice(randomIndex, 1);
-      }
-
-      for (let i = newOptions.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
-      }
-      setOptions(newOptions);
+    
+    if (newPool.length > 0) {
+      generateOptions(newPool[0], allItems);
     }
-  }, [pool, index]);
+  }, [sets, activeSetId, onFinish, settings.perSession]);
 
   // Chuyển sang câu hỏi tiếp theo
   const nextQuestion = () => {
     if (index < pool.length - 1) {
-      setIndex(index + 1);
+      const newIndex = index + 1;
+      setIndex(newIndex);
       setShowAnswer(false);
       setSelected(null);
+      generateOptions(pool[newIndex], sets.find(s => s.id === activeSetId).items);
     } else {
       toast.success("Bạn đã hoàn thành bài kiểm tra!");
       onFinish();
