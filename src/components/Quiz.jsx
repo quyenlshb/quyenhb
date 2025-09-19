@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import { saveLocal } from '../utils/storage';
 import { doc, setDoc } from 'firebase/firestore';
 
-export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db, updateWordPoints }) {
+export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db, updateWordItem }) {
   const [activeSetId, setActiveSetId] = useState(localStorage.getItem('activeSet') || '');
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
@@ -11,7 +11,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
   const [score, setScore] = useState(0);
-  const [isCorrect, setIsCorrect] = useState(false);
 
   // Phát âm thanh tiếng Nhật
   const playAudio = (text) => {
@@ -73,7 +72,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       }
       setOptions(newOptions);
     }
-  }, [pool, index, sets, activeSetId]);
+  }, [pool, index]); // Loại bỏ 'sets' khỏi dependency array để các đáp án không bị xáo trộn
 
   // Chuyển sang câu hỏi tiếp theo
   const nextQuestion = () => {
@@ -81,7 +80,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       setIndex(index + 1);
       setShowAnswer(false);
       setSelected(null);
-      setIsCorrect(false);
     } else {
       toast.success("Bạn đã hoàn thành bài kiểm tra!");
       onFinish();
@@ -97,57 +95,36 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     setShowAnswer(true);
 
     if (isAnswerCorrect) {
-      setIsCorrect(true);
       toast.success('Chính xác!');
       setScore(score + 1);
       
       const newPoints = (word.points || 0) + 1;
-      updateWordPoints(activeSetId, word.id, newPoints);
+      updateWordItem(activeSetId, word.id, { points: newPoints });
       onUpdatePoints(1);
 
       setTimeout(() => {
         nextQuestion();
       }, 1000);
     } else {
-      setIsCorrect(false);
       toast.error('Không đúng. Thử lại!');
       
       const newPoints = Math.max(0, (word.points || 0) - 1);
-      updateWordPoints(activeSetId, word.id, newPoints);
+      updateWordItem(activeSetId, word.id, { points: newPoints });
     }
   };
 
-  const handleNoteSave = async (note) => {
+  const handleNoteSave = (e) => {
+    const note = e.target.value;
     const currentWord = pool[index];
     if (!currentWord) return;
-    
-    const updatedSets = sets.map(s => {
-      if (s.id === activeSetId) {
-        return {
-          ...s,
-          items: s.items.map(item =>
-            item.id === currentWord.id ? { ...item, note: note } : item
-          )
-        };
-      }
-      return s;
-    });
-  
+
+    updateWordItem(activeSetId, currentWord.id, { note: note });
     if (user) {
-      try {
-        const userDocRef = doc(db, 'users', user.uid);
-        await setDoc(userDocRef, { sets: updatedSets }, { merge: true });
-        toast.success('Đã lưu ghi chú và đồng bộ!');
-      } catch (e) {
-        console.error("Lỗi khi lưu ghi chú: ", e);
-        toast.error("Không thể lưu ghi chú vào Firestore.");
-      }
+      toast.success('Đã lưu ghi chú và đồng bộ!');
     } else {
-      saveLocal('vocabSets', updatedSets);
       toast.success('Đã lưu ghi chú!');
     }
   };
-  
 
   if (pool.length === 0) {
     return (
@@ -204,19 +181,17 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
           <textarea
             className="w-full p-2 border rounded-lg mt-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             defaultValue={current.note}
-            onBlur={e => handleNoteSave(e.target.value)}
+            onBlur={handleNoteSave}
             placeholder="Thêm ghi chú..."
           />
-          {!isCorrect && (
-            <div className="flex justify-end mt-3">
-              <button
-                onClick={nextQuestion}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
-              >
-                Tiếp theo
-              </button>
-            </div>
-          )}
+          <div className="flex justify-end mt-3">
+            <button
+              onClick={nextQuestion}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
+            >
+              Tiếp theo
+            </button>
+          </div>
         </div>
       )}
     </div>

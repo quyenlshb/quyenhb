@@ -36,14 +36,14 @@ export default function App(){
     }
   };
 
-  const updateWordPoints = (setId, wordId, newPoints) => {
+  const updateWordItem = (setId, wordId, updates) => {
     const updatedSets = sets.map(set => {
       if (set.id === setId) {
         return {
           ...set,
           items: set.items.map(item => {
             if (item.id === wordId) {
-              return { ...item, points: newPoints };
+              return { ...item, ...updates };
             }
             return item;
           })
@@ -181,7 +181,7 @@ export default function App(){
       case 'vocab':
         return <VocabManager sets={sets} setSets={setSets} user={user} db={db} />;
       case 'quiz':
-        return <Quiz sets={sets} settings={settings} onFinish={handleBack} onUpdatePoints={savePoints} user={user} db={db} updateWordPoints={updateWordPoints} />;
+        return <Quiz sets={sets} settings={settings} onFinish={handleBack} onUpdatePoints={savePoints} user={user} db={db} updateWordItem={updateWordItem} />;
       default:
         return <div className="p-4">Không tìm thấy trang.</div>;
     }
