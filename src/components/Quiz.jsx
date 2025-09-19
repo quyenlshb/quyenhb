@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { loadLocal, saveLocal } from '../utils/storage';
-import { doc, setDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
+import { saveLocal } from '../utils/storage';
+import { doc, setDoc } from 'firebase/firestore';
 
-export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db, setSets }) {
+export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db, updateWordPoints }) {
   const [activeSetId, setActiveSetId] = useState(localStorage.getItem('activeSet') || '');
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
@@ -31,21 +31,17 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     }
 
     const allItems = setObj.items;
-
-    // Sắp xếp theo độ khó (points thấp trước)
     const sortedItems = [...allItems].sort((a, b) => (a.points || 0) - (b.points || 0));
 
-    // Lặp lại các từ để tạo pool, ưu tiên các từ có điểm thấp
     let newPool = [];
     const perSession = settings.perSession || 10;
     while (newPool.length < perSession) {
       const remaining = perSession - newPool.length;
       const toAdd = sortedItems.slice(0, remaining > sortedItems.length ? sortedItems.length : remaining);
       newPool = [...newPool, ...toAdd];
-      if (toAdd.length === 0) break; // Thoát nếu không còn từ nào để thêm
+      if (toAdd.length === 0) break;
     }
     
-    // Xáo trộn pool
     for (let i = newPool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [newPool[i], newPool[j]] = [newPool[j], newPool[i]];
@@ -71,7 +67,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
         otherWords.splice(randomIndex, 1);
       }
 
-      // Xáo trộn đáp án
       for (let i = newOptions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
@@ -106,48 +101,27 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       toast.success('Chính xác!');
       setScore(score + 1);
       
-      // Tăng điểm cho từ và tổng điểm
-      const newSets = sets.map(s => {
-        if (s.id === activeSetId) {
-          return {
-            ...s,
-            items: s.items.map(item =>
-              item.id === word.id ? { ...item, points: (item.points || 0) + 1 } : item
-            )
-          };
-        }
-        return s;
-      });
-      setSets(newSets);
+      const newPoints = (word.points || 0) + 1;
+      updateWordPoints(activeSetId, word.id, newPoints);
       onUpdatePoints(1);
 
-      // Tự động chuyển câu hỏi sau 1 giây
       setTimeout(() => {
         nextQuestion();
       }, 1000);
     } else {
       setIsCorrect(false);
       toast.error('Không đúng. Thử lại!');
-      // Giảm điểm cho từ (không giảm dưới 0)
-      const newSets = sets.map(s => {
-        if (s.id === activeSetId) {
-          return {
-            ...s,
-            items: s.items.map(item =>
-              item.id === word.id ? { ...item, points: Math.max(0, (item.points || 0) - 1) } : item
-            )
-          };
-        }
-        return s;
-      });
-      setSets(newSets);
+      
+      const newPoints = Math.max(0, (word.points || 0) - 1);
+      updateWordPoints(activeSetId, word.id, newPoints);
     }
   };
 
   const handleNoteSave = async (note) => {
     const currentWord = pool[index];
     if (!currentWord) return;
-
+    
+    // Cập nhật ghi chú trực tiếp trong App.jsx để đồng bộ
     const updatedSets = sets.map(s => {
       if (s.id === activeSetId) {
         return {
@@ -160,19 +134,8 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       return s;
     });
 
-    setSets(updatedSets);
-    saveLocal('vocabSets', updatedSets);
-
-    if (user) {
-      try {
-        const userDocRef = doc(db, 'users', user.uid);
-        await setDoc(userDocRef, { sets: updatedSets }, { merge: true });
-        toast.success('Đã lưu ghi chú và đồng bộ!');
-      } catch (e) {
-        console.error("Lỗi khi lưu ghi chú: ", e);
-        toast.error("Không thể lưu ghi chú vào Firestore.");
-      }
-    }
+    // Gọi hàm update từ App để đảm bảo đồng bộ
+    updateWordPoints(activeSetId, currentWord.id, currentWord.points);
   };
 
   if (pool.length === 0) {
@@ -233,7 +196,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
             onBlur={e => handleNoteSave(e.target.value)}
             placeholder="Thêm ghi chú..."
           />
-          {/* Nút Tiếp theo chỉ hiển thị khi trả lời sai */}
           {!isCorrect && (
             <div className="flex justify-end mt-3">
               <button
