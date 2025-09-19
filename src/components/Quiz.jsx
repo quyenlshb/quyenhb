@@ -7,13 +7,11 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
   const [activeSetId, setActiveSetId] = useState(localStorage.getItem('activeSet') || '');
   const [pool, setPool] = useState([]);
   const [index, setIndex] = useState(0);
-  const [timer, setTimer] = useState(settings.timer || 15);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
   const [score, setScore] = useState(0);
-  const [isAutoNext, setIsAutoNext] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false); // Trạng thái mới
+  const [isCorrect, setIsCorrect] = useState(false);
 
   // Phát âm thanh tiếng Nhật
   const playAudio = (text) => {
@@ -106,6 +104,8 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     if (isAnswerCorrect) {
       setIsCorrect(true);
       toast.success('Chính xác!');
+      setScore(score + 1);
+      
       // Tăng điểm cho từ và tổng điểm
       const newSets = sets.map(s => {
         if (s.id === activeSetId) {
@@ -124,7 +124,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       // Tự động chuyển câu hỏi sau 1 giây
       setTimeout(() => {
         nextQuestion();
-      }, 1000); // 1000ms = 1 giây
+      }, 1000);
     } else {
       setIsCorrect(false);
       toast.error('Không đúng. Thử lại!');
