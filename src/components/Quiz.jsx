@@ -13,36 +13,31 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ja-JP';
+      speechSynthesis.cancel(); // tránh chồng âm
       speechSynthesis.speak(utterance);
     }
   };
 
   // Hàm tạo đáp án trắc nghiệm
   const generateOptions = (currentWord, allItems) => {
-    const otherWords = allItems.filter(item => item.id !== currentWord.id);
-    const newOptions = [currentWord.meaning];
-    while (newOptions.length < 4 && newOptions.length < allItems.length) {
-      const randomIndex = Math.floor(Math.random() * otherWords.length);
-      const randomMeaning = otherWords[randomIndex].meaning;
-      if (!newOptions.includes(randomMeaning)) {
-        newOptions.push(randomMeaning);
-      }
-      otherWords.splice(randomIndex, 1);
-    }
-    
-    for (let i = newOptions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
-    }
-    setOptions(newOptions);
+    const wrongAnswers = allItems
+      .filter(item => item.id !== currentWord.id)
+      .map(item => item.meaning);
+
+    const shuffled = wrongAnswers.sort(() => 0.5 - Math.random());
+    const newOptions = [currentWord.meaning, ...shuffled.slice(0, 3)];
+
+    // shuffle 1 lần duy nhất cho mỗi câu
+    return newOptions.sort(() => 0.5 - Math.random());
   };
   
-  // Khởi tạo đáp án chỉ một lần khi component được mount hoặc khi index thay đổi
+  // Khởi tạo đáp án cho từng câu
   useEffect(() => {
     if (pool.length > 0 && index < pool.length) {
       const setObj = sets.find(s => s.id === activeSetId);
       if (setObj) {
-          generateOptions(pool[index], setObj.items);
+        const opts = generateOptions(pool[index], setObj.items);
+        setOptions(opts);
       }
     }
   }, [pool, index, activeSetId, sets]);
@@ -55,7 +50,7 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
       setSelected(null);
     } else {
       toast.success("Bạn đã hoàn thành bài kiểm tra!");
-      onFinish();
+      setTimeout(onFinish, 800); // delay để toast hiện rõ
     }
   };
 
@@ -70,7 +65,7 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
 
     if (isAnswerCorrect) {
       toast.success('Chính xác!');
-      setScore(score + 1);
+      setScore(prev => prev + 1);
       
       const newPoints = (currentWord.points || 0) + 1;
       updateWordItem(activeSetId, currentWord.id, { points: newPoints });
@@ -82,7 +77,6 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
 
     } else {
       toast.error('Không đúng. Thử lại!');
-      
       const newPoints = Math.max(0, (currentWord.points || 0) - 1);
       updateWordItem(activeSetId, currentWord.id, { points: newPoints });
     }
@@ -133,10 +127,14 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
             key={i}
             onClick={() => handleAnswer(opt)}
             className={`p-4 rounded-lg font-semibold text-left transition-colors duration-200
-              ${showAnswer ? 
-                (opt === current.meaning ? 'bg-green-500 text-white' : 
-                (opt === selected ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'))
-                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
+              ${
+                showAnswer
+                  ? opt === current.meaning
+                    ? 'bg-green-500 text-white'
+                    : opt === selected
+                      ? 'bg-red-500 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
               }`}
             disabled={showAnswer}
           >
