@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
-import { doc, setDoc } from 'firebase/firestore';
+import { FaVolumeUp } from 'react-icons/fa';
 
 export default function Quiz({ pool, activeSetId, onFinish, updateWordItem, sets, user, db }) {
   const [index, setIndex] = useState(0);
@@ -12,7 +12,7 @@ export default function Quiz({ pool, activeSetId, onFinish, updateWordItem, sets
   const current = pool[index];
   const allItems = sets.find(s => s.id === activeSetId)?.items || [];
 
-  // Hàm tạo đáp án trắc nghiệm
+  // Hàm tạo đáp án trắc nghiệm, chỉ chạy khi có từ mới
   const generateOptions = useCallback((currentWord, allItems) => {
     const wrongAnswers = allItems
       .filter(item => item.id !== currentWord.id)
@@ -48,13 +48,12 @@ export default function Quiz({ pool, activeSetId, onFinish, updateWordItem, sets
     setShowAnswer(true);
 
     const isCorrect = option === current.meaning;
-    const newPoints = isCorrect ? (current.points || 100) + 10 : (current.points || 100) - 10;
+    const newPoints = isCorrect ? (current.points || 100) + 10 : Math.max(0, (current.points || 100) - 10);
     const newScore = isCorrect ? score + 1 : score;
 
     setScore(newScore);
     updateWordItem(activeSetId, current.id, { points: newPoints });
 
-    // Tự động chuyển câu hỏi sau 2 giây
     setTimeout(() => {
       if (index < pool.length - 1) {
         setIndex(prev => prev + 1);
@@ -71,10 +70,16 @@ export default function Quiz({ pool, activeSetId, onFinish, updateWordItem, sets
     toast.success("Ghi chú đã được lưu!");
   };
 
+  // Xử lý trường hợp không có từ vựng
   if (!current) {
     return (
       <div className="flex justify-center items-center h-full p-4">
-        <p className="text-gray-600 dark:text-gray-400">Không tìm thấy từ vựng. Vui lòng kiểm tra lại bộ từ.</p>
+        <div className="text-center p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <p className="text-gray-600 dark:text-gray-400">Không có từ vựng để kiểm tra.</p>
+            <button onClick={onFinish} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+              Quay lại
+            </button>
+        </div>
       </div>
     );
   }

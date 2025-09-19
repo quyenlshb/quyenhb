@@ -36,7 +36,7 @@ export default function App() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [activeSetId]);
 
   // Tải dữ liệu từ Firestore hoặc localStorage
   const loadUserData = async (uid) => {
