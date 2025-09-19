@@ -121,7 +121,6 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     const currentWord = pool[index];
     if (!currentWord) return;
     
-    // Cập nhật ghi chú trực tiếp trong App.jsx để đồng bộ
     const updatedSets = sets.map(s => {
       if (s.id === activeSetId) {
         return {
@@ -133,10 +132,22 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       }
       return s;
     });
-
-    // Gọi hàm update từ App để đảm bảo đồng bộ
-    updateWordPoints(activeSetId, currentWord.id, currentWord.points);
+  
+    if (user) {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        await setDoc(userDocRef, { sets: updatedSets }, { merge: true });
+        toast.success('Đã lưu ghi chú và đồng bộ!');
+      } catch (e) {
+        console.error("Lỗi khi lưu ghi chú: ", e);
+        toast.error("Không thể lưu ghi chú vào Firestore.");
+      }
+    } else {
+      saveLocal('vocabSets', updatedSets);
+      toast.success('Đã lưu ghi chú!');
+    }
   };
+  
 
   if (pool.length === 0) {
     return (
