@@ -21,7 +21,7 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
   const generateOptions = (currentWord, allItems) => {
     const otherWords = allItems.filter(item => item.id !== currentWord.id);
     const newOptions = [currentWord.meaning];
-    while (newOptions.length < 4 && otherWords.length > 0) {
+    while (newOptions.length < 4 && newOptions.length < allItems.length) {
       const randomIndex = Math.floor(Math.random() * otherWords.length);
       const randomMeaning = otherWords[randomIndex].meaning;
       if (!newOptions.includes(randomMeaning)) {
