@@ -72,7 +72,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       }
       setOptions(newOptions);
     }
-  }, [pool, index]); // Loại bỏ 'sets' khỏi dependency array để các đáp án không bị xáo trộn
+  }, [pool, index]);
 
   // Chuyển sang câu hỏi tiếp theo
   const nextQuestion = () => {
@@ -102,9 +102,11 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       updateWordItem(activeSetId, word.id, { points: newPoints });
       onUpdatePoints(1);
 
+      // Tự động chuyển câu hỏi sau 1 giây
       setTimeout(() => {
         nextQuestion();
       }, 1000);
+
     } else {
       toast.error('Không đúng. Thử lại!');
       
