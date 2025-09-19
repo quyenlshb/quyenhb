@@ -1,25 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
+import { doc, setDoc } from 'firebase/firestore';
 
-export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePoints, user, db, updateWordItem, sets }) {
+export default function Quiz({ pool, activeSetId, onFinish, updateWordItem, sets, user, db }) {
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selected, setSelected] = useState(null);
   const [options, setOptions] = useState([]);
   const [score, setScore] = useState(0);
 
-  // Phát âm thanh tiếng Nhật
-  const playAudio = (text) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
-      speechSynthesis.cancel(); // tránh chồng âm
-      speechSynthesis.speak(utterance);
-    }
-  };
+  const current = pool[index];
+  const allItems = sets.find(s => s.id === activeSetId)?.items || [];
 
   // Hàm tạo đáp án trắc nghiệm
-  const generateOptions = (currentWord, allItems) => {
+  const generateOptions = useCallback((currentWord, allItems) => {
     const wrongAnswers = allItems
       .filter(item => item.id !== currentWord.id)
       .map(item => item.meaning);
@@ -27,143 +21,114 @@ export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePo
     const shuffled = wrongAnswers.sort(() => 0.5 - Math.random());
     const newOptions = [currentWord.meaning, ...shuffled.slice(0, 3)];
 
-    // shuffle 1 lần duy nhất cho mỗi câu
+    // Trộn ngẫu nhiên 1 lần duy nhất khi tạo
     return newOptions.sort(() => 0.5 - Math.random());
-  };
-  
-  // Khởi tạo đáp án cho từng câu
+  }, []);
+
+  // Effect để khởi tạo đáp án khi câu hỏi thay đổi
   useEffect(() => {
     if (pool.length > 0 && index < pool.length) {
-      const setObj = sets.find(s => s.id === activeSetId);
-      if (setObj) {
-        const opts = generateOptions(pool[index], setObj.items);
-        setOptions(opts);
-      }
-    }
-  }, [pool, index, activeSetId, sets]);
-
-  // Chuyển sang câu hỏi tiếp theo
-  const nextQuestion = () => {
-    if (index < pool.length - 1) {
-      setIndex(index + 1);
+      setOptions(generateOptions(pool[index], allItems));
       setShowAnswer(false);
       setSelected(null);
-    } else {
-      toast.success("Bạn đã hoàn thành bài kiểm tra!");
-      setTimeout(onFinish, 800); // delay để toast hiện rõ
+    }
+  }, [index, pool, generateOptions, allItems]);
+
+  const playAudio = (text) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
     }
   };
 
-  // Xử lý khi người dùng chọn đáp án
-  const handleAnswer = (answer) => {
-    if (showAnswer) return;
-
-    const currentWord = pool[index];
-    const isAnswerCorrect = answer === currentWord.meaning;
-    setSelected(answer);
+  const handleAnswer = (option) => {
+    setSelected(option);
     setShowAnswer(true);
 
-    if (isAnswerCorrect) {
-      toast.success('Chính xác!');
-      setScore(prev => prev + 1);
-      
-      const newPoints = (currentWord.points || 0) + 1;
-      updateWordItem(activeSetId, currentWord.id, { points: newPoints });
-      onUpdatePoints(1);
+    const isCorrect = option === current.meaning;
+    const newPoints = isCorrect ? (current.points || 100) + 10 : (current.points || 100) - 10;
+    const newScore = isCorrect ? score + 1 : score;
 
-      setTimeout(() => {
-        nextQuestion();
-      }, 1000);
+    setScore(newScore);
+    updateWordItem(activeSetId, current.id, { points: newPoints });
 
-    } else {
-      toast.error('Không đúng. Thử lại!');
-      const newPoints = Math.max(0, (currentWord.points || 0) - 1);
-      updateWordItem(activeSetId, currentWord.id, { points: newPoints });
-    }
+    // Tự động chuyển câu hỏi sau 2 giây
+    setTimeout(() => {
+      if (index < pool.length - 1) {
+        setIndex(prev => prev + 1);
+      } else {
+        toast.success(`Bạn đã hoàn thành quiz! Điểm số: ${newScore}/${pool.length}`);
+        onFinish();
+      }
+    }, 2000);
   };
 
-  const handleNoteSave = (e) => {
-    const note = e.target.value;
-    const currentWord = pool[index];
-    if (!currentWord) return;
-
-    updateWordItem(activeSetId, currentWord.id, { note: note });
-    if (user) {
-      toast.success('Đã lưu ghi chú và đồng bộ!');
-    } else {
-      toast.success('Đã lưu ghi chú!');
-    }
+  const handleNoteSave = async (e) => {
+    const newNote = e.target.value;
+    updateWordItem(activeSetId, current.id, { note: newNote });
+    toast.success("Ghi chú đã được lưu!");
   };
-  
-  if (pool.length === 0) {
-    onFinish();
-    return null;
+
+  if (!current) {
+    return (
+      <div className="flex justify-center items-center h-full p-4">
+        <p className="text-gray-600 dark:text-gray-400">Không tìm thấy từ vựng. Vui lòng kiểm tra lại bộ từ.</p>
+      </div>
+    );
   }
 
-  const current = pool[index];
-
   return (
-    <div className="quiz-container p-4 max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg my-6">
-      <div className="flex justify-between items-center mb-4 text-gray-700 dark:text-gray-300">
-        <span>Câu hỏi: {index + 1}/{pool.length}</span>
-        <span>Điểm: {score}</span>
-      </div>
+    <div className="p-4 md:p-8 min-h-screen-minus-header flex flex-col justify-center items-center bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+      <div className="w-full max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:p-8 text-center">
+        <div className="text-gray-500 dark:text-gray-400 mb-4">
+          Câu hỏi {index + 1} / {pool.length}
+        </div>
+        <div className="flex flex-col items-center justify-center mb-6">
+          <h2 className="text-5xl font-bold text-gray-900 dark:text-white mb-2">{current.kanji}</h2>
+          <p className="text-2xl text-gray-700 dark:text-gray-300 mb-4">{current.kana}</p>
+          <button onClick={() => playAudio(current.kana)} className="p-2 text-xl text-indigo-600 hover:text-indigo-800">
+            <FaVolumeUp />
+          </button>
+        </div>
 
-      <div className="bg-indigo-50 dark:bg-indigo-900 rounded-lg p-6 mb-6 text-center shadow-inner">
-        <h2 className="text-4xl font-bold text-indigo-800 dark:text-indigo-200">
-          {current.kanji}
-        </h2>
-        <p className="text-xl mt-2 text-indigo-600 dark:text-indigo-400">{current.kana}</p>
-        <button onClick={() => playAudio(current.kana)} className="mt-4 text-2xl text-indigo-500 hover:text-indigo-700 transition">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.81 5 3.54 5 6.71s-2.11 5.9-5 6.71v2.06c4.01-.91 7-4.47 7-8.77s-2.99-7.86-7-8.77z"/>
-          </svg>
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {options.map((opt, i) => (
-          <button
-            key={i}
-            onClick={() => handleAnswer(opt)}
-            className={`p-4 rounded-lg font-semibold text-left transition-colors duration-200
-              ${
-                showAnswer
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {options.map((opt, i) => (
+            <button
+              key={i}
+              onClick={() => handleAnswer(opt)}
+              className={`
+                p-4 rounded-lg font-semibold transition
+                ${showAnswer
                   ? opt === current.meaning
                     ? 'bg-green-500 text-white'
                     : opt === selected
                       ? 'bg-red-500 text-white'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                   : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
-              }`}
-            disabled={showAnswer}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
-
-      {showAnswer && (
-        <div className="mt-6 p-4 border-t border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Nghĩa:</h3>
-          <p className="text-gray-700 dark:text-gray-300 mb-2">{current.meaning}</p>
-          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Ghi chú:</h3>
-          <textarea
-            className="w-full p-2 border rounded-lg mt-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            defaultValue={current.note}
-            onBlur={handleNoteSave}
-            placeholder="Thêm ghi chú..."
-          />
-          <div className="flex justify-end mt-3">
-            <button
-              onClick={nextQuestion}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
+                }`}
+              disabled={showAnswer}
             >
-              Tiếp theo
+              {opt}
             </button>
-          </div>
+          ))}
         </div>
-      )}
+
+        {showAnswer && (
+          <div className="mt-6 p-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Nghĩa:</h3>
+            <p className="text-gray-700 dark:text-gray-300 mb-2">{current.meaning}</p>
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Ghi chú:</h3>
+            <textarea
+              className="w-full p-2 border rounded-lg mt-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              defaultValue={current.note}
+              onBlur={handleNoteSave}
+              placeholder="Thêm ghi chú..."
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
