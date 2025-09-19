@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { saveLocal } from '../utils/storage';
-import { doc, setDoc } from 'firebase/firestore';
 
-export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, db, updateWordItem }) {
-  const [activeSetId, setActiveSetId] = useState(localStorage.getItem('activeSet') || '');
-  const [pool, setPool] = useState([]);
+export default function Quiz({ pool, activeSetId, settings, onFinish, onUpdatePoints, user, db, updateWordItem, sets }) {
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -34,55 +30,29 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       otherWords.splice(randomIndex, 1);
     }
     
-    // Xáo trộn các lựa chọn
     for (let i = newOptions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
     }
     setOptions(newOptions);
   };
-
-  // Khởi tạo quiz và đáp án cho câu hỏi đầu tiên
+  
+  // Khởi tạo đáp án chỉ một lần khi component được mount hoặc khi index thay đổi
   useEffect(() => {
-    const setObj = sets.find(s => s.id === activeSetId);
-    if (!setObj || setObj.items.length === 0) {
-      onFinish();
-      return;
+    if (pool.length > 0 && index < pool.length) {
+      const setObj = sets.find(s => s.id === activeSetId);
+      if (setObj) {
+          generateOptions(pool[index], setObj.items);
+      }
     }
-
-    const allItems = setObj.items;
-    const sortedItems = [...allItems].sort((a, b) => (a.points || 0) - (b.points || 0));
-
-    let newPool = [];
-    const perSession = settings.perSession || 10;
-    while (newPool.length < perSession) {
-      const remaining = perSession - newPool.length;
-      const toAdd = sortedItems.slice(0, remaining > sortedItems.length ? sortedItems.length : remaining);
-      newPool = [...newPool, ...toAdd];
-      if (toAdd.length === 0) break;
-    }
-    
-    for (let i = newPool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [newPool[i], newPool[j]] = [newPool[j], newPool[i]];
-    }
-
-    setPool(newPool);
-    setScore(0);
-    
-    if (newPool.length > 0) {
-      generateOptions(newPool[0], allItems);
-    }
-  }, [sets, activeSetId, onFinish, settings.perSession]);
+  }, [pool, index, activeSetId, sets]);
 
   // Chuyển sang câu hỏi tiếp theo
   const nextQuestion = () => {
     if (index < pool.length - 1) {
-      const newIndex = index + 1;
-      setIndex(newIndex);
+      setIndex(index + 1);
       setShowAnswer(false);
       setSelected(null);
-      generateOptions(pool[newIndex], sets.find(s => s.id === activeSetId).items);
     } else {
       toast.success("Bạn đã hoàn thành bài kiểm tra!");
       onFinish();
@@ -90,10 +60,11 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
   };
 
   // Xử lý khi người dùng chọn đáp án
-  const handleAnswer = (answer, word) => {
+  const handleAnswer = (answer) => {
     if (showAnswer) return;
 
-    const isAnswerCorrect = answer === word.meaning;
+    const currentWord = pool[index];
+    const isAnswerCorrect = answer === currentWord.meaning;
     setSelected(answer);
     setShowAnswer(true);
 
@@ -101,11 +72,10 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       toast.success('Chính xác!');
       setScore(score + 1);
       
-      const newPoints = (word.points || 0) + 1;
-      updateWordItem(activeSetId, word.id, { points: newPoints });
+      const newPoints = (currentWord.points || 0) + 1;
+      updateWordItem(activeSetId, currentWord.id, { points: newPoints });
       onUpdatePoints(1);
 
-      // Tự động chuyển câu hỏi sau 1 giây
       setTimeout(() => {
         nextQuestion();
       }, 1000);
@@ -113,8 +83,8 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     } else {
       toast.error('Không đúng. Thử lại!');
       
-      const newPoints = Math.max(0, (word.points || 0) - 1);
-      updateWordItem(activeSetId, word.id, { points: newPoints });
+      const newPoints = Math.max(0, (currentWord.points || 0) - 1);
+      updateWordItem(activeSetId, currentWord.id, { points: newPoints });
     }
   };
 
@@ -130,13 +100,10 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
       toast.success('Đã lưu ghi chú!');
     }
   };
-
+  
   if (pool.length === 0) {
-    return (
-      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-        Đang chuẩn bị bài kiểm tra...
-      </div>
-    );
+    onFinish();
+    return null;
   }
 
   const current = pool[index];
@@ -164,7 +131,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
         {options.map((opt, i) => (
           <button
             key={i}
-            onClick={() => handleAnswer(opt, current)}
+            onClick={() => handleAnswer(opt)}
             className={`p-4 rounded-lg font-semibold text-left transition-colors duration-200
               ${showAnswer ? 
                 (opt === current.meaning ? 'bg-green-500 text-white' : 
