@@ -13,6 +13,7 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
   const [options, setOptions] = useState([]);
   const [score, setScore] = useState(0);
   const [isAutoNext, setIsAutoNext] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false); // Trạng thái mới
 
   // Phát âm thanh tiếng Nhật
   const playAudio = (text) => {
@@ -34,146 +35,126 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
     const allItems = setObj.items;
 
     // Sắp xếp theo độ khó (points thấp trước)
-    const sortedItems = [...allItems].sort((a, b) => (a.points || 100) - (b.points || 100));
+    const sortedItems = [...allItems].sort((a, b) => (a.points || 0) - (b.points || 0));
 
-    // Lấy số từ cần học
-    const wordsToLearn = sortedItems.slice(0, settings.perSession || 4);
-    if (wordsToLearn.length === 0) {
-      toast.info("Bộ từ này trống hoặc bạn đã thuộc tất cả các từ!");
-      onFinish();
-      return;
+    // Lặp lại các từ để tạo pool, ưu tiên các từ có điểm thấp
+    let newPool = [];
+    const perSession = settings.perSession || 10;
+    while (newPool.length < perSession) {
+      const remaining = perSession - newPool.length;
+      const toAdd = sortedItems.slice(0, remaining > sortedItems.length ? sortedItems.length : remaining);
+      newPool = [...newPool, ...toAdd];
+      if (toAdd.length === 0) break; // Thoát nếu không còn từ nào để thêm
     }
-
-    // Lặp lại mỗi từ 3 lần
-    let quizItems = [];
-    for (let i = 0; i < 3; i++) {
-      quizItems = quizItems.concat(wordsToLearn);
-    }
-
-    // Xáo trộn
-    const shuffledPool = quizItems.sort(() => 0.5 - Math.random());
-    setPool(shuffledPool);
-    setTimer(settings.timer);
     
-  }, [activeSetId, sets, settings, onFinish]);
+    // Xáo trộn pool
+    for (let i = newPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newPool[i], newPool[j]] = [newPool[j], newPool[i]];
+    }
 
-  const current = pool[index];
+    setPool(newPool);
+    setScore(0);
+  }, [sets, activeSetId, onFinish, settings.perSession]);
 
-  // Sinh đáp án
+  // Tạo đáp án trắc nghiệm khi câu hỏi thay đổi
   useEffect(() => {
-    if (!current) return;
-    const correctOption = current.meaning;
-    const otherMeanings = sets.flatMap(s => s.items).map(item => item.meaning).filter(m => m !== correctOption);
-    const shuffledOthers = otherMeanings.sort(() => 0.5 - Math.random()).slice(0, 3);
-    const newOptions = [...shuffledOthers, correctOption].sort(() => 0.5 - Math.random());
-    setOptions(newOptions);
-    setShowAnswer(false);
-    setSelected(null);
-    setTimer(settings.timer);
-  }, [current, sets, settings]);
-
-  // Đếm ngược
-  useEffect(() => {
-    if (showAnswer) return;
-    const countdown = setInterval(() => {
-      setTimer(prev => {
-        if (prev <= 1) {
-          clearInterval(countdown);
-          handleSkip();
-          return 0;
+    if (pool.length > 0 && index < pool.length) {
+      const currentWord = pool[index];
+      const otherWords = sets.find(s => s.id === activeSetId)?.items.filter(item => item.id !== currentWord.id) || [];
+      
+      const newOptions = [currentWord.meaning];
+      while (newOptions.length < 4 && otherWords.length > 0) {
+        const randomIndex = Math.floor(Math.random() * otherWords.length);
+        const randomMeaning = otherWords[randomIndex].meaning;
+        if (!newOptions.includes(randomMeaning)) {
+          newOptions.push(randomMeaning);
         }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(countdown);
-  }, [showAnswer, current]);
-
-  // Lưu điểm từ
-  const updateWordPoints = (word, isCorrect) => {
-    const newPoints = (word.points || 100) + (isCorrect ? 10 : -20);
-    
-    const updatedSets = sets.map(s => {
-      if (s.id === activeSetId) {
-        return {
-          ...s,
-          items: s.items.map(item => {
-            if (item.id === word.id) {
-              return { ...item, points: newPoints };
-            }
-            return item;
-          })
-        };
+        otherWords.splice(randomIndex, 1);
       }
-      return s;
-    });
-    
-    setSets(updatedSets);
-    if (user) {
-      setDoc(doc(db, 'users', user.uid), { sets: updatedSets }, { merge: true }).catch(e => {
-        console.error("Lỗi đồng bộ điểm từ: ", e);
-      });
+
+      // Xáo trộn đáp án
+      for (let i = newOptions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newOptions[i], newOptions[j]] = [newOptions[j], newOptions[i]];
+      }
+      setOptions(newOptions);
     }
-  };
+  }, [pool, index, sets, activeSetId]);
 
-  // Khi chọn đáp án
-  const handleAnswer = (option) => {
-    setSelected(option);
-    setShowAnswer(true);
-
-    if (option === current.meaning) {
-      setScore(prev => prev + 1); // dùng callback để tránh score cũ
-      playAudio(current.kana);
-      updateWordPoints(current, true);
-      toast.success('Chính xác!', { autoClose: 1000 });
-      setIsAutoNext(true); // bật cờ, để useEffect xử lý
-    } else {
-      updateWordPoints(current, false);
-      toast.error('Sai rồi.', { autoClose: 1500 });
-    }
-  };
-
-  // Auto next sau khi trả lời đúng
-  useEffect(() => {
-    if (isAutoNext) {
-      const timer = setTimeout(() => {
-        nextQuestion();
-        setIsAutoNext(false);
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [isAutoNext]);
-
-  const handleSkip = () => {
-    setShowAnswer(true);
-    updateWordPoints(current, false);
-    toast.info('Bạn đã bỏ qua câu hỏi.', { autoClose: 1500 });
-  };
-
+  // Chuyển sang câu hỏi tiếp theo
   const nextQuestion = () => {
     if (index < pool.length - 1) {
-      setIndex(prevIndex => prevIndex + 1);
-      setTimer(settings.timer);
+      setIndex(index + 1);
       setShowAnswer(false);
       setSelected(null);
+      setIsCorrect(false);
     } else {
-      onUpdatePoints(score);
-      toast.success(`Bạn đã hoàn thành phiên học! Bạn đạt được ${score} điểm.`, { autoClose: 3000 });
+      toast.success("Bạn đã hoàn thành bài kiểm tra!");
       onFinish();
     }
   };
 
-  const handleNoteSave = async (newNote) => {
+  // Xử lý khi người dùng chọn đáp án
+  const handleAnswer = (answer, word) => {
+    if (showAnswer) return;
+
+    const isAnswerCorrect = answer === word.meaning;
+    setSelected(answer);
+    setShowAnswer(true);
+
+    if (isAnswerCorrect) {
+      setIsCorrect(true);
+      toast.success('Chính xác!');
+      // Tăng điểm cho từ và tổng điểm
+      const newSets = sets.map(s => {
+        if (s.id === activeSetId) {
+          return {
+            ...s,
+            items: s.items.map(item =>
+              item.id === word.id ? { ...item, points: (item.points || 0) + 1 } : item
+            )
+          };
+        }
+        return s;
+      });
+      setSets(newSets);
+      onUpdatePoints(1);
+
+      // Tự động chuyển câu hỏi sau 1 giây
+      setTimeout(() => {
+        nextQuestion();
+      }, 1000); // 1000ms = 1 giây
+    } else {
+      setIsCorrect(false);
+      toast.error('Không đúng. Thử lại!');
+      // Giảm điểm cho từ (không giảm dưới 0)
+      const newSets = sets.map(s => {
+        if (s.id === activeSetId) {
+          return {
+            ...s,
+            items: s.items.map(item =>
+              item.id === word.id ? { ...item, points: Math.max(0, (item.points || 0) - 1) } : item
+            )
+          };
+        }
+        return s;
+      });
+      setSets(newSets);
+    }
+  };
+
+  const handleNoteSave = async (note) => {
+    const currentWord = pool[index];
+    if (!currentWord) return;
+
     const updatedSets = sets.map(s => {
       if (s.id === activeSetId) {
         return {
           ...s,
-          items: s.items.map(item => {
-            if (item.id === current.id) {
-              return { ...item, note: newNote };
-            }
-            return item;
-          })
+          items: s.items.map(item =>
+            item.id === currentWord.id ? { ...item, note: note } : item
+          )
         };
       }
       return s;
@@ -181,111 +162,88 @@ export default function Quiz({ sets, settings, onFinish, onUpdatePoints, user, d
 
     setSets(updatedSets);
     saveLocal('vocabSets', updatedSets);
+
     if (user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), { sets: updatedSets }, { merge: true });
-        toast.success('Đã lưu ghi chú!', { autoClose: 1500 });
+        const userDocRef = doc(db, 'users', user.uid);
+        await setDoc(userDocRef, { sets: updatedSets }, { merge: true });
+        toast.success('Đã lưu ghi chú và đồng bộ!');
       } catch (e) {
-        console.error("Lỗi đồng bộ ghi chú: ", e);
+        console.error("Lỗi khi lưu ghi chú: ", e);
+        toast.error("Không thể lưu ghi chú vào Firestore.");
       }
     }
   };
 
   if (pool.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-4 min-h-screen-minus-header">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg text-center">
-          <p className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Vui lòng chọn một bộ từ trong mục quản lý.</p>
-          <button onClick={onFinish} className="px-6 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700">Quay lại</button>
-        </div>
+      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+        Đang chuẩn bị bài kiểm tra...
       </div>
     );
   }
 
+  const current = pool[index];
+
   return (
-    <div className="flex flex-col items-center p-4 md:p-8 min-h-screen-minus-header bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-      {/* Thông tin hiển thị */}
-      <div className="w-full max-w-2xl flex justify-between items-center mb-4">
-        <div className="text-lg font-bold text-gray-700 dark:text-gray-300">Score: {score}</div>
-        <div className={`font-bold text-3xl ${timer <= 3 ? 'text-red-500 animate-pulse' : 'text-gray-700 dark:text-gray-300'}`}>{timer}s</div>
+    <div className="quiz-container p-4 max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg my-6">
+      <div className="flex justify-between items-center mb-4 text-gray-700 dark:text-gray-300">
+        <span>Câu hỏi: {index + 1}/{pool.length}</span>
+        <span>Điểm: {score}</span>
       </div>
 
-      {/* ProgressBar */}
-      <div className="w-full max-w-2xl bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-        <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(index / pool.length) * 100}%` }}></div>
+      <div className="bg-indigo-50 dark:bg-indigo-900 rounded-lg p-6 mb-6 text-center shadow-inner">
+        <h2 className="text-4xl font-bold text-indigo-800 dark:text-indigo-200">
+          {current.kanji}
+        </h2>
+        <p className="text-xl mt-2 text-indigo-600 dark:text-indigo-400">{current.kana}</p>
+        <button onClick={() => playAudio(current.kana)} className="mt-4 text-2xl text-indigo-500 hover:text-indigo-700 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.81 5 3.54 5 6.71s-2.11 5.9-5 6.71v2.06c4.01-.91 7-4.47 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </button>
       </div>
       
-      {/* Question Card */}
-      <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:p-8 mb-6 text-center transition-transform duration-300 ease-in-out">
-        <h2 className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 mb-4">{current.kanji}</h2>
-        {showAnswer && (
-          <p className="text-lg text-gray-700 dark:text-gray-300 font-medium">{current.kana}</p>
-        )}
-      </div>
-      
-      {/* Options */}
-      <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {options.map(opt => (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {options.map((opt, i) => (
           <button
-            key={opt}
-            onClick={() => handleAnswer(opt)}
+            key={i}
+            onClick={() => handleAnswer(opt, current)}
+            className={`p-4 rounded-lg font-semibold text-left transition-colors duration-200
+              ${showAnswer ? 
+                (opt === current.meaning ? 'bg-green-500 text-white' : 
+                (opt === selected ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'))
+                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
+              }`}
             disabled={showAnswer}
-            className={`
-              w-full p-4 text-lg rounded-lg shadow font-semibold transition
-              ${showAnswer
-                ? opt === current.meaning
-                  ? 'bg-green-500 text-white'
-                  : selected === opt
-                    ? 'bg-red-500 text-white'
-                    : 'bg-gray-200 text-gray-500'
-                : 'bg-blue-600 text-white hover:bg-blue-700'}
-            `}
           >
             {opt}
           </button>
         ))}
-        {!showAnswer && (
-          <button
-            onClick={handleSkip}
-            className="col-span-1 sm:col-span-2 p-4 rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400"
-          >
-            Chưa biết
-          </button>
-        )}
       </div>
 
-      {/* Đáp án + Ghi chú */}
       {showAnswer && (
-        <div className="w-full max-w-2xl p-4 bg-gray-100 dark:bg-gray-700 rounded-lg shadow-inner mt-6">
-          <p className="font-semibold text-gray-900 dark:text-white">Đáp án:</p>
-          <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{current.kana} - {current.meaning}</p>
+        <div className="mt-6 p-4 border-t border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Nghĩa:</h3>
+          <p className="text-gray-700 dark:text-gray-300 mb-2">{current.meaning}</p>
+          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Ghi chú:</h3>
           <textarea
             className="w-full p-2 border rounded-lg mt-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             defaultValue={current.note}
             onBlur={e => handleNoteSave(e.target.value)}
             placeholder="Thêm ghi chú..."
           />
-          <div className="flex justify-end mt-3">
-            <button
-              onClick={nextQuestion}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
-            >
-              Tiếp theo
-            </button>
-          </div>
-        </div>
-      )}
-      
-      {/* Loading indicator cho auto next */}
-      {isAutoNext && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl flex items-center space-x-3">
-            <svg className="animate-spin h-6 w-6 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="text-lg text-gray-800 dark:text-gray-200">Đang tự động chuyển câu hỏi...</p>
-          </div>
+          {/* Nút Tiếp theo chỉ hiển thị khi trả lời sai */}
+          {!isCorrect && (
+            <div className="flex justify-end mt-3">
+              <button
+                onClick={nextQuestion}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
+              >
+                Tiếp theo
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
