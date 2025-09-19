@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Quiz from './Quiz';
+import Quiz from './components/Quiz.jsx';
 
 function App() {
   const [sets, setSets] = useState([]);
@@ -8,7 +8,7 @@ function App() {
   const [inQuiz, setInQuiz] = useState(false);
   const [points, setPoints] = useState(0);
 
-  // Giả sử bạn có dữ liệu sets từ db
+  // Load sets từ localStorage
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('sets')) || [];
     setSets(stored);
@@ -42,6 +42,7 @@ function App() {
           : s
       )
     );
+    localStorage.setItem('sets', JSON.stringify(sets));
   };
 
   const handleUpdatePoints = (val) => {
